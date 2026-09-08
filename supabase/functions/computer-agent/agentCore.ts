@@ -335,6 +335,9 @@ function extractProgress(data: any): {
   console.log(
     `browser-use payload keys=${Object.keys(data ?? {}).join(",")} steps=${rawEvents.length}`,
   );
+  if (rawEvents.length) {
+    console.log(`bu-step-shape ${JSON.stringify(rawEvents[rawEvents.length - 1]).slice(0, 900)}`);
+  }
   // Two kinds of line per step: what the agent was thinking, and what it
   // actually did on the computer (opened a page, clicked, typed, extracted…).
   // Both are kept so the reader can follow the real work, not a summary.
