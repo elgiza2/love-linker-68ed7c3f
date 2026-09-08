@@ -217,19 +217,15 @@ export default function AgentTrace({
 
   return (
     <div className={cn("my-3 w-full", className)}>
-      {/* While the agent works the trace is open by itself; the toggle only
-          shows up once there is a finished run to fold away. */}
-      {running ? (
-        <div className="flex items-center gap-2 text-[13.5px] font-medium text-foreground/80">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-          <span>Working</span>
-        </div>
-      ) : (
+      {/* While the agent works the steps stand on their own — no button. The
+          "Worked for …" toggle only appears once the run has finished. */}
+      {!running && (
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="flex items-center gap-1.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
+          <MegsyStar className="h-3.5 w-3.5 shrink-0 text-[var(--megsy-blue)]" aria-hidden />
           <span>{elapsedMs ? `Worked for ${formatDuration(elapsedMs)}` : "Worked"}</span>
           {open ? (
             <ChevronDown className="h-3.5 w-3.5" />
@@ -240,7 +236,8 @@ export default function AgentTrace({
       )}
 
       {showList && list}
-      {running && screenOpen !== undefined && screen}
+      {(running || open) && screen}
     </div>
   );
 }
+
