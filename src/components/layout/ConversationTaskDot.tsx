@@ -10,10 +10,9 @@ export default function ConversationTaskDot({ state }: { state?: TaskIndicator }
   if (!state) return null;
   if (state === "running") {
     return (
-      <MegsyStar
-        className="h-3.5 w-3.5 shrink-0 text-amber-400 motion-safe:animate-spin [animation-duration:2.6s]"
-        title="Task running"
-      />
+      <span className="inline-flex shrink-0" title="Task running">
+        <MegsyStar className="h-3.5 w-3.5 text-amber-400 motion-safe:animate-spin [animation-duration:2.6s]" />
+      </span>
     );
   }
   return (
