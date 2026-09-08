@@ -50,6 +50,41 @@ const DocumentPreviewPage = () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  /** Word (.doc) export — Word opens this HTML-based format natively. */
+  const downloadWord = () => {
+    if (!patched) return;
+    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>${patched}</body></html>`;
+    const blob = new Blob(["\ufeff", doc], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filenameBase}.doc`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Word file downloaded");
+  };
+
+  /** Excel export: every table in the document becomes a sheet-ready file. */
+  const downloadExcel = () => {
+    if (!patched) return;
+    const parsed = new DOMParser().parseFromString(patched, "text/html");
+    const tables = Array.from(parsed.querySelectorAll("table"));
+    if (!tables.length) {
+      toast.error("This document has no table to export");
+      return;
+    }
+    const body = tables.map((t) => t.outerHTML).join("<br/>");
+    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>${body}</body></html>`;
+    const blob = new Blob(["\ufeff", doc], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filenameBase}.xls`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Excel file downloaded");
+  };
+
   const downloadPdf = async () => {
     if (!html) return;
     setExporting(true);
@@ -71,12 +106,16 @@ const DocumentPreviewPage = () => {
       setTimeout(() => URL.revokeObjectURL(url), 2000);
       toast.success("PDF downloaded", { id: "pdf-export" });
     } catch (e) {
+      // No PDF service configured (or it failed): fall back to the browser's
+      // own "Save as PDF" print dialog so the user still gets a real file.
       console.error("[docs] downloadPdf failed", e);
-      toast.error("Could not create PDF — try downloading as HTML", { id: "pdf-export" });
+      toast.info("Opening the print dialog — choose “Save as PDF”.", { id: "pdf-export" });
+      await printDoc();
     } finally {
       setExporting(false);
     }
   };
+
 
   const printDoc = async () => {
     if (!patched) return;
