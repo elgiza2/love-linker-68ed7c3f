@@ -596,10 +596,17 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         );
         if (session.ok) liveUrl = String(session.data?.liveUrl ?? session.data?.live_url ?? "") || null;
       }
-      // Persist any new steps (dedupe on title+index count).
+      // Persist any new steps. Deduped on the line itself, so a long run whose
+      // upstream step window has scrolled past never loses or repeats history.
       const existing = await listEvents(supabase, task.id);
-      if (info.events.length > existing.length) {
-        const fresh = info.events.slice(existing.length).map((e) => ({
+      const seen = new Set(
+        (existing as Array<{ title?: string; url?: string | null }>).map(
+          (e) => `${e.title ?? ""}|${e.url ?? ""}`,
+        ),
+      );
+      const fresh = info.events
+        .filter((e) => !seen.has(`${e.title}|${e.url ?? ""}`))
+        .map((e) => ({
           task_id: task.id,
           user_id: user.id,
           kind: "step",
@@ -607,8 +614,8 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           detail: e.detail ?? null,
           url: e.url ?? null,
         }));
-        if (fresh.length) await supabase.from("computer_events").insert(fresh);
-      }
+      if (fresh.length) await supabase.from("computer_events").insert(fresh);
+
 
       // Output files are referenced by id upstream; resolve short-lived
       // download URLs only once the task produced them.
