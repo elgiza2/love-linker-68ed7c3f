@@ -630,55 +630,13 @@ export async function runChatStreamTurn(opts: RunChatStreamTurnOptions): Promise
     }
   }
 
-  /**
-   * The agent: the real OpenManus repository, running in its own isolated cloud
-   * workspace with a browser, a shell, Python and files. Its answer is handed to
-   * the reply as verified ground truth, so the streamed message is written from
-   * work that actually happened instead of guesses.
-   */
-  if (!isDeepResearch) {
-    try {
-      const { shouldRunAgent, agentStepBudget, runAgentTask } =
-        await import("@/lib/agent/openManus");
-      if (shouldRunAgent(lastUserText, String(chatMode))) {
-        setIsThinking(true);
-        setSearchStatus("Planning");
-        const result = await runAgentTask({
-          userText: lastUserText,
-          context: researchContext,
-          conversationId: backgroundCid || conversationId,
-          maxSteps: agentStepBudget(lastUserText),
-          signal: controller.signal,
-          onStep: (label, detail) => {
-            setToolActivity({ name: label, status: "running" });
-            // Show the agent's actual reasoning line, not a step counter.
-            narrate(detail === label ? label : detail.slice(0, 200));
-          },
-        });
-        if (result?.answer) {
-          const evidence = `Work completed by the agent (${result.steps} steps). Use this as the verified result:\n\n${result.answer}`;
-          const lastMsg = allMessages[allMessages.length - 1];
-          if (typeof lastMsg.content === "string") {
-            lastMsg.content = `${lastMsg.content}\n\n${evidence}`;
-          } else if (Array.isArray(lastMsg.content)) {
-            lastMsg.content.push({ type: "text" as const, text: evidence });
-          }
-        }
-      }
-    } catch {
-      // The agent is an enhancement — a failure must never block the reply.
-    } finally {
-      resetToolUi();
-    }
-  }
-
   // Stall watchdog: a request that never returns anything used to leave the
   // "Thinking…" state hanging forever and then vanish with no answer. If no
   // token, narration or tool activity arrives at all, end the turn with a
   // clear, retryable message in the user's own language.
   const isArabicTurn = /[\u0600-\u06FF]/.test(userInput || "");
-  const STALL_MS = 75_000;
-  const MAX_SILENT_ROUNDS = 4;
+  const STALL_MS = 30_000;
+  const MAX_SILENT_ROUNDS = 2;
   let silentRounds = 0;
   let stallTimer: ReturnType<typeof setTimeout> | null = null;
   const armStallWatchdog = () => {

@@ -521,16 +521,18 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       // SAME upstream browser session, so a follow-up continues the previous
       // work instead of opening a brand new conversation on the provider.
       let reuseSession: string | null = null;
+      let reuseKeyRef: string | null = null;
       if (conversationId) {
         const { data: prev } = await supabase
           .from("computer_tasks")
-          .select("provider_session_id")
+          .select("provider_session_id,provider_key_ref")
           .eq("user_id", user.id)
           .eq("conversation_id", conversationId)
           .not("provider_session_id", "is", null)
           .order("created_at", { ascending: false })
           .limit(1);
         reuseSession = (prev?.[0]?.provider_session_id as string | undefined) || null;
+        reuseKeyRef = (prev?.[0]?.provider_key_ref as string | undefined) || null;
       }
 
 
@@ -576,20 +578,54 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         ...(session ? { sessionId: session } : {}),
       });
 
+      // One-off tasks close their auto-created session when they finish. Create
+      // an explicit keep-alive session so every follow-up in this app
+      // conversation truly continues in the same upstream browser context.
+      const createDurableSession = async () => {
+        const session = await callUpstream(supabase, {
+          path: "/sessions",
+          method: "POST",
+          body: { keepAlive: true, persistMemory: true, enableRecording: false },
+        });
+        if (!session.ok) return session;
+        const id = String(session.data?.id ?? session.data?.sessionId ?? "");
+        if (!id) return { ok: false, status: 502, message: "session_id_missing" } as UpstreamFail;
+        return { ...session, sessionId: id };
+      };
+
+      if (!reuseSession) {
+        const durable = await createDurableSession();
+        if (!durable.ok) {
+          const fail = durable as UpstreamFail;
+          await supabase
+            .from("computer_tasks")
+            .update({ status: "failed", error: "provider_error", updated_at: new Date().toISOString() })
+            .eq("id", taskId);
+          return {
+            status: 200,
+            body: { task_id: taskId, status: "failed", error: "provider_error", message: fail.message },
+          };
+        }
+        reuseSession = durable.sessionId;
+        reuseKeyRef = durable.key.id;
+      }
+
       let res = await callUpstream(supabase, {
         path: "/tasks",
         method: "POST",
         body: startBody(llmCandidates[0], reuseSession),
-      });
+      }, reuseKeyRef);
       // A reused session can be closed upstream; fall back to a fresh one
       // rather than failing the whole turn.
       if (!res.ok && reuseSession) {
-        reuseSession = null;
+        const durable = await createDurableSession();
+        reuseSession = durable.ok ? durable.sessionId : null;
+        reuseKeyRef = durable.ok ? durable.key.id : null;
         res = await callUpstream(supabase, {
           path: "/tasks",
           method: "POST",
-          body: startBody(llmCandidates[0], null),
-        });
+          body: startBody(llmCandidates[0], reuseSession),
+        }, reuseKeyRef);
       }
       for (let i = 1; i < llmCandidates.length && !res.ok; i += 1) {
         const failMsg = (res as UpstreamFail).message ?? "";
@@ -600,7 +636,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           path: "/tasks",
           method: "POST",
           body: startBody(llmCandidates[i], reuseSession),
-        });
+        }, reuseKeyRef);
       }
 
 
@@ -654,6 +690,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         .update({
           provider_task_id: providerId || null,
           provider_session_id: createdSession,
+          provider_key_ref: res.key.id,
 
           // key_id is a uuid FK to manus_keys, so browser-use / shared-pool /
           // env keys stay null.
@@ -685,7 +722,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       const res = await callUpstream(
         supabase,
         { path: `/tasks/${task.provider_task_id}`, method: "GET" },
-        task.key_id,
+        task.provider_key_ref ?? task.key_id,
       );
       if (!res.ok) {
         const patch = { status: "failed", error: "provider_error", updated_at: new Date().toISOString() };
@@ -705,9 +742,9 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           {
             path: `/tasks/${task.provider_task_id}`,
             method: "PATCH",
-            body: { action: "resume_task" },
+            body: { action: "resume" },
           },
-          task.key_id,
+          task.provider_key_ref ?? task.key_id,
         );
         if (resumed.ok) info.status = "running";
       }
@@ -730,7 +767,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         const session = await callUpstream(
           supabase,
           { path: `/sessions/${sessionId}`, method: "GET" },
-          task.key_id,
+          task.provider_key_ref ?? task.key_id,
         );
         if (session.ok) liveUrl = String(session.data?.liveUrl ?? session.data?.live_url ?? "") || null;
       }
@@ -769,7 +806,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         const dl = await callUpstream(
           supabase,
           { path: `/files/tasks/${task.provider_task_id}/output-files/${f.id}`, method: "GET" },
-          task.key_id,
+           task.provider_key_ref ?? task.key_id,
         );
         const url = dl.ok ? String((dl.data as any)?.downloadUrl ?? "") : "";
         if (url) resolvedFiles.push({ name: f.name, url });
@@ -824,7 +861,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
             method: "PATCH",
             body: { action: "stop_task_and_session" },
           },
-          task.key_id,
+          task.provider_key_ref ?? task.key_id,
         );
       }
       await supabase
