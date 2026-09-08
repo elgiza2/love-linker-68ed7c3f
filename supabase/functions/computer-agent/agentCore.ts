@@ -335,36 +335,81 @@ function extractProgress(data: any): {
   console.log(
     `browser-use payload keys=${Object.keys(data ?? {}).join(",")} steps=${rawEvents.length}`,
   );
-  // Only real reasoning/goal text becomes a visible line. A bare step counter
-  // says nothing to the reader, so an event without wording is dropped.
+  // Two kinds of line per step: what the agent was thinking, and what it
+  // actually did on the computer (opened a page, clicked, typed, extracted…).
+  // Both are kept so the reader can follow the real work, not a summary.
+  const describeAction = (a: unknown): string => {
+    if (typeof a === "string") return a.replace(/\s+/g, " ").trim().slice(0, 180);
+    if (!a || typeof a !== "object") return "";
+    const obj = a as Record<string, any>;
+    const name = Object.keys(obj)[0];
+    const args = (obj[name] ?? {}) as Record<string, any>;
+    const val = (k: string) => (args && typeof args === "object" ? args[k] : undefined);
+    const label = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 90);
+    switch (name) {
+      case "go_to_url":
+      case "open_tab":
+      case "navigate":
+        return `Opened ${label(val("url"))}`;
+      case "search_google":
+      case "search":
+        return `Searched for “${label(val("query"))}”`;
+      case "click_element_by_index":
+      case "click_element":
+      case "click":
+        return `Clicked ${label(val("element_text") || val("text") || `element ${val("index") ?? ""}`)}`;
+      case "input_text":
+      case "type":
+        return `Typed “${label(val("text"))}”`;
+      case "scroll":
+      case "scroll_down":
+      case "scroll_up":
+        return "Scrolled the page";
+      case "extract_structured_data":
+      case "extract_content":
+        return `Read the page for ${label(val("query") || "details")}`;
+      case "write_file":
+      case "save_file":
+        return `Saved the file ${label(val("file_name") || val("path"))}`;
+      case "read_file":
+        return `Opened the file ${label(val("file_name") || val("path"))}`;
+      case "execute_js":
+      case "run_code":
+      case "python":
+        return "Ran code";
+      case "switch_tab":
+        return "Switched tab";
+      case "wait":
+        return "Waited for the page";
+      case "done":
+        return "Finished the task";
+      default:
+        return name ? `${name.replace(/_/g, " ")}` : "";
+    }
+  };
+
   const events = rawEvents
-    .map((e) => {
-      const title = String(
-        e?.nextGoal || e?.next_goal || e?.thought || e?.thinking || e?.goal ||
+    .flatMap((e) => {
+      const thought = String(
+        e?.thought || e?.thinking || e?.nextGoal || e?.next_goal || e?.goal ||
           e?.evaluationPreviousGoal || e?.evaluation_previous_goal || e?.memory || "",
       )
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 200);
-      const detail = [
-        typeof e?.memory === "string" && e.memory !== title ? e.memory : "",
-        Array.isArray(e?.actions)
-          ? e.actions
-              .map((a: unknown) => (typeof a === "string" ? a : JSON.stringify(a)))
-              .join(", ")
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" · ")
-        .slice(0, 800);
-      return {
-        title,
-        detail: detail || undefined,
-        url: typeof e?.url === "string" ? e.url : undefined,
-      };
+      const url = typeof e?.url === "string" ? e.url : undefined;
+      const out: { title: string; detail?: string; url?: string }[] = [];
+      if (thought) out.push({ title: thought, detail: url, url });
+      const actions = Array.isArray(e?.actions) ? e.actions : [];
+      for (const a of actions) {
+        const line = describeAction(a);
+        if (line) out.push({ title: line, detail: url, url });
+      }
+      return out;
     })
     .filter((e) => !!e.title)
-    .slice(-50);
+    .slice(-120);
+
 
 
   const rawFiles: any[] = Array.isArray(data?.outputFiles) ? data.outputFiles : [];
