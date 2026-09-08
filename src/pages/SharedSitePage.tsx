@@ -18,7 +18,7 @@ const SharedSitePage = () => {
       if (!slug) return setState("missing");
       const { data } = await supabase
         .from("generated_sites")
-        .select("title, html_compiled, deploy_url, published_url, is_public")
+        .select("title, html_compiled, preview_url, published_url, is_public")
         .eq("share_slug", slug)
         .eq("is_public", true)
         .maybeSingle();
@@ -26,7 +26,7 @@ const SharedSitePage = () => {
       const compiled = (data as any)?.html_compiled as string | null;
       if (!data || !compiled) {
         // Sites deployed to an external host only keep a URL, no HTML copy.
-        const external = ((data as any)?.deploy_url || "") as string;
+        const external = ((data as any)?.preview_url || "") as string;
         if (external) {
           window.location.replace(external);
           return;
