@@ -19,5 +19,16 @@
 - [ ] Error handling & recovery, cross-service flows, security/data isolation
 - [ ] Final QA report with scores + severities
 
+## Fix round (in progress)
+- [x] Images: auto-pick a free model, never lose the user's text
+- [x] Slides: respect the requested slide count
+- [x] Documents: real Word / Excel / PDF downloads
+- [x] Plan & credits shown correctly on the usage page
+- [x] Published site links (/s/:slug) now open the real site instead of redirecting to chat
+- [x] Website builder works without a cloud build machine (publishes a live link)
+- [x] Link labels keep their path so site/doc links are distinguishable
+- [ ] Deep Research: speed + sources
+- [ ] Long-running tasks recovery pass
+
 ## After audit
 - [ ] Giant fix round based on findings (only after full audit approval)
