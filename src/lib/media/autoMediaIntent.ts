@@ -65,13 +65,22 @@ export async function pickDefaultMediaModel(
     .select("*")
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
-  if (error || !Array.isArray(data) || data.length === 0) return null;
 
-  const rows = type === "image" ? filterImageModels(data) : data;
+  let rows: any[] = Array.isArray(data) && !error ? data : [];
+  if (type === "image") {
+    // The catalogue table can be empty on a fresh backend; the curated models
+    // the picker already shows are the same list, so use them here too instead
+    // of leaving the user with no model at all.
+    const { withCuratedImageModels } = await import("@/lib/curatedImageModels");
+    rows = filterImageModels(withCuratedImageModels(rows as any) as any) as any[];
+  }
+  if (rows.length === 0) return null;
+
   const isFree = (r: any) =>
     /deapi/i.test(`${r.slug || ""} ${r.provider || ""} ${r.name || ""}`) ||
     Number(r.credits ?? r.credit_cost ?? 0) === 0;
-  const free = rows.filter((r: any) => isFree(r) && !r.is_premium);
-  const pick = free[0] || rows.find((r: any) => !r.is_premium) || rows[0];
+  const free = rows.filter((r: any) => isFree(r) && !r.is_premium && !r.isPremium);
+  const pick = free[0] || rows.find((r: any) => !r.is_premium && !r.isPremium) || rows[0];
   return pick ? toChoice(pick, type) : null;
 }
+

@@ -4,6 +4,9 @@ import { isFastLaneEligible, tryFastChat } from "@/lib/chat/fastChat";
 import { readChatModelPreferences } from "@/lib/chatModelPreferences";
 import { edgeAnonKey, edgeUrl } from "@/lib/edgeRuntime";
 
+/** Dev-only: the local /api/chat probe is skipped once it reports no provider key. */
+let localChatProxyUsable = true;
+
 /**
  * Internal reasoning is ON by default: users expect to see the thinking trace
  * without hunting for a toggle. Only an explicit opt-out turns it off.
@@ -475,7 +478,7 @@ export async function streamChat({
     // Primary runtime (dev only): this app's own serverless chat endpoint streams
     // the model's reasoning deltas. In production that path does not exist, so
     // the request goes straight to the deployed edge function below.
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && localChatProxyUsable) {
       try {
         const primary = await fetch("/api/chat", {
           method: "POST",
@@ -490,12 +493,16 @@ export async function streamChat({
         ) {
           resp = primary;
         } else {
+          // 503 = no local provider key in this environment. Remember that so
+          // every later turn skips the dead probe instead of paying for it.
+          if (primary.status === 503 || primary.status === 404) localChatProxyUsable = false;
           try { await primary.body?.cancel(); } catch { /* ignore */ }
         }
       } catch {
         /* fall through to the Supabase edge function */
       }
     }
+
     // Headers watchdog: if the full chat function does not even answer with
     // headers in time, stop waiting and let the fast lane rescue the turn.
     const HEADERS_TIMEOUT_MS = deepResearch ? 120_000 : 30_000;
@@ -546,7 +553,7 @@ export async function streamChat({
     // Second deployment path (dev only): when the Supabase edge function is
     // unreachable or failing, the same turn is served by this app's local
     // serverless runtime (`/api/chat`), which streams the identical SSE.
-    if (import.meta.env.DEV && (!resp || resp.status >= 500 || resp.status === 404)) {
+    if (import.meta.env.DEV && localChatProxyUsable && (!resp || resp.status >= 500 || resp.status === 404)) {
       try {
         const proxied = await fetch("/api/chat", {
           method: "POST",
