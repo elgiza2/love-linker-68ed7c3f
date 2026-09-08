@@ -32,6 +32,8 @@
 - [x] Preserve long user messages behind an expandable “show more” control
 - [x] Stop new messages from cancelling the current cloud-agent task
 - [x] Reuse the same Browser Use session for follow-ups in one conversation
+- [x] Keep Browser Use sessions alive and resume paused tasks correctly
+- [x] Remove the legacy agent wait from normal chat and cap silent waiting
 
 ## One agent (Browser Use Cloud) — in progress
 - [x] Route main agent / docs / deep research / coding to the single cloud agent

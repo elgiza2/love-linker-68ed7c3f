@@ -301,9 +301,11 @@ async function saveMemory(
   );
 }
 
-function normalizeStatus(raw: unknown): string {
+function normalizeStatus(raw: unknown, isSuccess?: unknown): string {
   const s = String(raw ?? "").toLowerCase();
-  if (["finished", "completed", "success", "succeeded", "done"].includes(s)) return "done";
+  if (["finished", "completed", "success", "succeeded", "done"].includes(s)) {
+    return isSuccess === false ? "failed" : "done";
+  }
   if (["failed", "error", "canceled", "cancelled", "stopped"].includes(s)) return "failed";
   if (["pending", "queued", "created"].includes(s)) return "pending";
   // A paused agent is still alive — it is waiting, not finished. Never treat it
@@ -329,7 +331,7 @@ function extractProgress(data: any): {
   }[];
 
 } {
-  const status = normalizeStatus(data?.status);
+  const status = normalizeStatus(data?.status, data?.isSuccess ?? data?.is_success);
   // Browser Use has shipped both camelCase and snake_case step payloads, and
   // sometimes nests them under `task`/`output`. Accept every shape so the
   // thinking trace is never empty while the agent is clearly working.
@@ -725,7 +727,10 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         task.provider_key_ref ?? task.key_id,
       );
       if (!res.ok) {
-        const patch = { status: "failed", error: "provider_error", updated_at: new Date().toISOString() };
+        const retryable = res.status === 429 || res.status >= 500;
+        const patch = retryable
+          ? { status: task.status, progress: task.progress, updated_at: new Date().toISOString() }
+          : { status: "failed", error: res.message || "provider_error", updated_at: new Date().toISOString() };
         await supabase.from("computer_tasks").update(patch).eq("id", task.id);
         return {
           status: 200,
@@ -848,7 +853,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       if (!payload.task_id) return { status: 400, body: { error: "Missing task_id" } };
       const { data: task } = await supabase
         .from("computer_tasks")
-        .select("id,provider_task_id,key_id")
+        .select("id,provider_task_id,key_id,provider_key_ref")
         .eq("id", payload.task_id)
         .eq("user_id", user.id)
         .maybeSingle();

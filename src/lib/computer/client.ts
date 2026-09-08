@@ -107,6 +107,6 @@ export function computerErrorMessage(
     case "provider_error":
       return providerMessage?.trim() || "The computer task couldn't be started. Please try again.";
     default:
-      return code ? "The computer task failed." : "";
+      return providerMessage?.trim() || code || "";
   }
 }
