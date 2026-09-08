@@ -296,7 +296,7 @@ export async function runSlidesTurn(args: RunSlidesTurnArgs): Promise<void> {
 
     setSearchStatus("Writing slides");
     let agentBrief = brief || "";
-    if (!plan?.outline?.steps?.length) {
+    if (!plan?.outline?.steps?.length || plan.outline.steps.length !== targetCount) {
       try {
         const { generateSlidesOutline, generateSlidesContent } = await import(
           "@/lib/slides/generateOutline"
