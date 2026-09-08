@@ -170,10 +170,16 @@ export default function AgentTrace({
 
         {running && (
           <div className="flex items-center gap-2 pt-0.5 text-[13px] text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            <span>{status?.trim() || "Thinking…"}</span>
+            <MegsyStar
+              className="h-3.5 w-3.5 shrink-0 text-[var(--megsy-blue)] motion-safe:animate-pulse"
+              aria-hidden
+            />
+            <span className="ai-shimmer font-medium motion-reduce:animate-none">
+              {status?.trim() || "Thinking…"}
+            </span>
           </div>
         )}
+
       </div>
     </div>
   );
