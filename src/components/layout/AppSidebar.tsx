@@ -111,6 +111,9 @@ function groupByDate(items: Conversation[]) {
   return buckets;
 }
 
+import ConversationTaskDot from "@/components/layout/ConversationTaskDot";
+import { useTaskIndicators } from "@/lib/computer/taskIndicators";
+
 const AppSidebar = ({
   open,
   onClose,
@@ -127,6 +130,7 @@ const AppSidebar = ({
   const navigate = useNavigate();
   const location = useLocation();
   const activeWs = useActiveWorkspaceId();
+  const taskIndicators = useTaskIndicators();
 
   // Hydrate user from cache instantly so the bottom pill never flashes.
   const [conversations, setConversations] = useState<Conversation[]>([]);
