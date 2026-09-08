@@ -132,53 +132,58 @@ export default function ComputerTaskCard({ taskId }: Props) {
     );
   }
 
+  const fileGrid =
+    files.length > 0 ? (
+      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {files.map((f) => {
+          const isImage =
+            /\.(png|jpe?g|webp|gif|avif)$/i.test(f.url) || !!f.type?.startsWith("image/");
+          const isVideo = /\.(mp4|webm|mov)$/i.test(f.url) || !!f.type?.startsWith("video/");
+          const ext = (f.name.split(".").pop() || "file").toLowerCase().slice(0, 4);
+          return (
+            <button
+              key={f.url}
+              type="button"
+              onClick={() => setPreview({ url: f.url, name: f.name, type: f.type })}
+              title={f.name}
+              className="group flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-border/50 bg-foreground/[0.03] p-3 text-start transition-colors hover:bg-foreground/[0.07]"
+            >
+              <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/10">
+                {isImage ? (
+                  <img src={f.url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : isVideo ? (
+                  <span className="text-[10px] font-semibold uppercase text-primary">vid</span>
+                ) : (
+                  <span className="text-[11px] font-semibold uppercase text-primary">{ext}</span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium text-foreground">
+                  {f.name}
+                </span>
+                <span className="block text-[11.5px] text-muted-foreground">
+                  اضغط للمعاينة
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
 
   return (
     <div className="my-4 space-y-4">
       {trace}
 
-      {task?.result_text && <ChatMessage role="assistant" content={task.result_text} />}
-
-      {files.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {files.map((f) => {
-            const isImage = /\.(png|jpe?g|webp|gif|avif)$/i.test(f.url) || f.type?.startsWith("image/");
-            const isVideo = /\.(mp4|webm|mov)$/i.test(f.url) || f.type?.startsWith("video/");
-            if (isImage || isVideo) {
-              return (
-                <div
-                  key={f.url}
-                  className="w-full overflow-hidden rounded-xl border border-border/40"
-                >
-                  {isImage ? (
-                    <img src={f.url} alt={f.name} loading="lazy" className="max-h-64 w-full object-cover" />
-                  ) : (
-                    <video src={f.url} controls className="max-h-64 w-full" />
-                  )}
-                </div>
-              );
-            }
-            const ext = (f.name.split(".").pop() || "file").toLowerCase().slice(0, 4);
-            return (
-              <a
-                key={f.url}
-                href={f.url}
-                target="_blank"
-                rel="noreferrer"
-                download={f.name}
-                title={f.name}
-                className="inline-flex max-w-full items-center gap-2 rounded-lg bg-foreground/[0.06] px-2.5 py-1.5 text-[12.5px] text-foreground/90 transition-colors hover:bg-foreground/10"
-              >
-                <span className="grid h-[18px] shrink-0 place-items-center rounded bg-primary/85 px-1 text-[9px] font-semibold uppercase text-primary-foreground">
-                  {ext}
-                </span>
-                <span className="truncate">{f.name}</span>
-              </a>
-            );
-          })}
-        </div>
+      {task?.result_text ? (
+        <ChatMessage role="assistant" content={task.result_text} bottomSlot={fileGrid} />
+      ) : (
+        fileGrid
       )}
+
+      <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }
+
 
