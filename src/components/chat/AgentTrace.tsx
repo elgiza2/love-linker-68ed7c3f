@@ -26,6 +26,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { ComputerEvent } from "@/lib/computer/client";
+import MegsyStar from "@/components/branding/MegsyStar";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -35,8 +36,11 @@ interface Props {
   startedAt?: string | null;
   endedAt?: string | null;
   liveUrl?: string | null;
+  /** Coding runs start with the computer screen hidden. */
+  screenDefaultOpen?: boolean;
   className?: string;
 }
+
 
 function formatDuration(ms: number): string {
   const total = Math.max(1, Math.round(ms / 1000));
