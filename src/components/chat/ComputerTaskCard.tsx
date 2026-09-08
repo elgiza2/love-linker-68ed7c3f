@@ -16,6 +16,8 @@ import {
 } from "@/lib/computer/client";
 import AgentTrace from "@/components/chat/AgentTrace";
 import ChatMessage from "@/components/chat/ChatMessage";
+import FilePreviewDialog, { type PreviewFile } from "@/components/chat/FilePreviewDialog";
+
 
 import { clearActiveComputerRun, setActiveComputerRun } from "@/lib/computer/activeRun";
 import { clearComputerLiveView, setComputerLiveView } from "@/lib/computer/liveView";
@@ -33,7 +35,9 @@ export default function ComputerTaskCard({ taskId }: Props) {
   const [task, setTask] = useState<ComputerTask | null>(null);
   const [events, setEvents] = useState<ComputerEvent[]>([]);
   const [timedOut, setTimedOut] = useState(false);
+  const [preview, setPreview] = useState<PreviewFile | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   useEffect(() => {
     let cancelled = false;
