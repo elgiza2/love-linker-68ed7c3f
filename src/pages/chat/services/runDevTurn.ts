@@ -167,7 +167,7 @@ export async function runDevTurn({
     if (cid) {
       const assistantId = await saveMessage(cid, "assistant", content, undefined, {
         kind: "devRun",
-        devRunId: started.run.id,
+        devRunId,
         reasoning: trace,
       });
       if (assistantId) ownInsertedIdsRef.current.add(assistantId);
