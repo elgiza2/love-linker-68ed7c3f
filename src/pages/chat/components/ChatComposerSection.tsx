@@ -182,7 +182,7 @@ export function ChatComposerSection(props: ChatComposerSectionProps) {
 
                 <ComposerAnimatedInput
                 {...(composerAnimatedInputProps as any)}
-                {/* The computer screen lives in the chat trace, not the composer. */}
+                
                 modesToggleVisible
                 modesShown={effectiveModesShown}
                 onToggleModes={() => setModesShown((v) => !v)}
