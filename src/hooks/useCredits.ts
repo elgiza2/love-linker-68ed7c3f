@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useActiveWorkspaceId, WORKSPACE_CHANGED_EVENT } from "@/lib/activeWorkspace";
 import { getCachedUser } from "@/lib/cachedUser";
 import { getOwnProfile, invalidateOwnProfile } from "@/lib/ownProfile";
+import { getActiveSubscriptionPlan, invalidateEffectivePlan } from "@/lib/effectivePlan";
 
 export const CREDITS_CHANGED_EVENT = "credits-changed";
 
@@ -37,11 +38,16 @@ export function useCredits() {
         setCredits(0);
       }
     } else {
-      const data = await getOwnProfile(user.id);
+      const [data, sub] = await Promise.all([
+        getOwnProfile(user.id),
+        getActiveSubscriptionPlan(user.id),
+      ]);
       if (data) {
         setCredits(Number(data.credits));
         setPlan((data as any).plan || "free");
       }
+      // An active paid subscription is the source of truth for the plan badge.
+      if (sub) setPlan(sub.plan);
     }
     setLoading(false);
   }, [wsId]);
@@ -54,6 +60,7 @@ export function useCredits() {
     const onChange = () => {
       // Credit balance changed server-side — bypass the shared profile cache.
       invalidateOwnProfile();
+      invalidateEffectivePlan();
       void fetchCredits();
     };
     window.addEventListener(WORKSPACE_CHANGED_EVENT, onChange);
