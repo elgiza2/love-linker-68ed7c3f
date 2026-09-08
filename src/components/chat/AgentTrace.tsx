@@ -1,13 +1,30 @@
 /**
  * @doc Browser-Use style activity trace for cloud agent tasks.
  *
- * While the agent works it shows a live, never-truncated list of what it thought
- * and what it actually did on the computer (opened, clicked, typed, read…),
- * plus a small Browser card with the current screen. When the task finishes the
- * whole history stays available behind a "Worked for …" toggle.
+ * While the agent works the list is always visible — no toggle to press. Every
+ * line carries its own icon (thinking, opened, clicked, typed, scrolled, read,
+ * saved, ran code, waited, finished) so the sequence reads cleanly.
+ * Once the task finishes the whole history collapses behind a single
+ * "Worked for …" button, and nothing is ever thrown away.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Globe, Loader2 } from "lucide-react";
+import {
+  ArrowDownWideNarrow,
+  BookOpen,
+  Brain,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Globe,
+  Keyboard,
+  Loader2,
+  MousePointerClick,
+  Save,
+  Search,
+  Terminal,
+  Wrench,
+} from "lucide-react";
 import type { ComputerEvent } from "@/lib/computer/client";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +51,23 @@ const isNoise = (line: string) =>
   /^\s*[[{]/.test(line) ||
   /^(checkpoint|state|error|traceback)\b/i.test(line);
 
+/** One icon per kind of step, matched on the action wording the kernel emits. */
+function stepIcon(title: string, kind: string) {
+  if (kind === "thought") return Brain;
+  const t = title.toLowerCase();
+  if (/^(searched|search)/.test(t)) return Search;
+  if (/^(opened|open|navigat|went|visited|switched tab)/.test(t)) return Globe;
+  if (/^(clicked|click|tapped|selected)/.test(t)) return MousePointerClick;
+  if (/^(typed|type|filled|entered|wrote)/.test(t)) return Keyboard;
+  if (/^(scrolled|scroll)/.test(t)) return ArrowDownWideNarrow;
+  if (/^(read|extracted|found)/.test(t)) return BookOpen;
+  if (/^(saved|downloaded|uploaded|wrote file)/.test(t)) return Save;
+  if (/^(ran code|ran|executed|code)/.test(t)) return Terminal;
+  if (/^(waited|wait)/.test(t)) return Clock;
+  if (/^(finished|done|completed)/.test(t)) return CheckCircle2;
+  return Wrench;
+}
+
 export default function AgentTrace({
   events,
   running,
@@ -43,18 +77,16 @@ export default function AgentTrace({
   liveUrl,
   className,
 }: Props) {
-  const [open, setOpen] = useState(running);
+  // Finished runs start collapsed behind the "Worked for …" button.
+  const [open, setOpen] = useState(false);
+  const [screenOpen, setScreenOpen] = useState(true);
   const listRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (running) setOpen(true);
-  }, [running]);
 
   // Auto-follow the newest line while the agent is working.
   useEffect(() => {
-    if (!running || !open) return;
+    if (!running) return;
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [events.length, running, open]);
+  }, [events.length, running]);
 
   const rows = useMemo(
     () => events.filter((e) => !isNoise((e.title ?? "").trim())),
@@ -72,109 +104,131 @@ export default function AgentTrace({
     () => [...rows].reverse().find((e) => e.screenshot_url)?.screenshot_url || null,
     [rows],
   );
-  const currentLine = status || rows.at(-1)?.title || "";
 
   if (rows.length === 0 && !running) return null;
 
-  return (
-    <div className={cn("my-3 w-full", className)}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span>
-          {running
-            ? "Working"
-            : elapsedMs
-              ? `Worked for ${formatDuration(elapsedMs)}`
-              : "Worked"}
-        </span>
-        {open ? (
-          <ChevronDown className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
-        )}
-      </button>
+  const showList = running || open;
 
-      {open && (
-        <div
-          ref={listRef}
-          className="mt-2 max-h-[420px] overflow-y-auto border-s border-border/50 ps-3.5 [scrollbar-width:thin]"
-        >
-          <div className="space-y-1.5">
-            {rows.map((e) => {
-              const thought = (e.kind ?? "thought") === "thought";
-              const dur = Number(e.duration ?? 0);
-              return (
-                <div key={e.id} className="space-y-1">
-                  {thought && dur > 0 && (
-                    <p className="text-[12px] text-muted-foreground/70">
-                      Thought for {Math.round(dur)}s
-                    </p>
-                  )}
-                  {thought ? (
+  const list = (
+    <div
+      ref={listRef}
+      className={cn(
+        "max-h-[420px] overflow-y-auto border-s border-border/50 ps-3 [scrollbar-width:thin]",
+        running ? "mt-1" : "mt-2",
+      )}
+    >
+      <div className="space-y-2">
+        {rows.map((e) => {
+          const kind = (e.kind ?? "thought") === "thought" ? "thought" : "action";
+          const Icon = stepIcon(e.title || "", kind);
+          const dur = Number(e.duration ?? 0);
+          return (
+            <div key={e.id} className="flex items-start gap-2">
+              <Icon
+                className={cn(
+                  "mt-[3px] h-3.5 w-3.5 shrink-0",
+                  kind === "thought" ? "text-muted-foreground/60" : "text-primary/70",
+                )}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                {kind === "thought" ? (
+                  <>
                     <p className="text-[13px] italic leading-relaxed text-muted-foreground">
                       {e.title}
                     </p>
-                  ) : (
-                    <div className="flex items-start gap-1.5 text-[13px] leading-relaxed text-foreground/80">
-                      <ChevronRight className="mt-[3px] h-3.5 w-3.5 shrink-0 text-muted-foreground/70 rtl:rotate-180" />
-                      {e.url ? (
-                        <a
-                          href={e.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="truncate hover:underline"
-                        >
-                          {e.title}
-                        </a>
-                      ) : (
-                        <span className="min-w-0 break-words">{e.title}</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {running && (
-              <div className="flex items-center gap-1.5 pt-0.5 text-[13px] text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Thinking…</span>
+                    {dur > 0 && (
+                      <p className="mt-0.5 text-[11.5px] text-muted-foreground/60">
+                        Thought for {Math.round(dur)}s
+                      </p>
+                    )}
+                  </>
+                ) : e.url ? (
+                  <a
+                    href={e.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block truncate text-[13px] leading-relaxed text-foreground/85 hover:underline"
+                  >
+                    {e.title}
+                  </a>
+                ) : (
+                  <span className="block break-words text-[13px] leading-relaxed text-foreground/85">
+                    {e.title}
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-
-          {running && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-border/50 bg-foreground/[0.03]">
-              <div className="flex items-center gap-2 px-3 py-2">
-                <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[12.5px] font-medium text-foreground/80">Browser</span>
-                <span className="ms-auto h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              </div>
-              {lastShot ? (
-                <img
-                  src={lastShot}
-                  alt="Agent screen"
-                  loading="lazy"
-                  className="max-h-48 w-full object-cover"
-                />
-              ) : liveUrl ? (
-                <iframe
-                  src={liveUrl}
-                  title="Agent screen"
-                  className="h-48 w-full border-0"
-                  sandbox="allow-scripts allow-same-origin"
-                />
-              ) : null}
-              {currentLine && (
-                <p className="truncate px-3 py-2 text-[12px] text-muted-foreground">{currentLine}</p>
-              )}
             </div>
+          );
+        })}
+
+        {running && (
+          <div className="flex items-center gap-2 pt-0.5 text-[13px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            <span>{status?.trim() || "Thinking…"}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const screen = (lastShot || liveUrl) && (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setScreenOpen((v) => !v)}
+        className="mb-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {screenOpen ? "إخفاء الكمبيوتر" : "إظهار الكمبيوتر"}
+      </button>
+      {screenOpen && (
+        <div className="overflow-hidden rounded-xl border border-border/50 bg-foreground/[0.03]">
+          {lastShot ? (
+            <img
+              src={lastShot}
+              alt=""
+              loading="lazy"
+              className="max-h-56 w-full object-cover object-top"
+            />
+          ) : (
+            <iframe
+              src={liveUrl!}
+              title=""
+              className="h-56 w-full border-0"
+              sandbox="allow-scripts allow-same-origin"
+            />
           )}
         </div>
       )}
+    </div>
+  );
+
+  return (
+    <div className={cn("my-3 w-full", className)}>
+      {/* While the agent works the trace is open by itself; the toggle only
+          shows up once there is a finished run to fold away. */}
+      {running ? (
+        <div className="flex items-center gap-2 text-[13.5px] font-medium text-foreground/80">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          <span>Working</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <span>{elapsedMs ? `Worked for ${formatDuration(elapsedMs)}` : "Worked"}</span>
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
+          )}
+        </button>
+      )}
+
+      {showList && list}
+      {running && screenOpen !== undefined && screen}
     </div>
   );
 }
