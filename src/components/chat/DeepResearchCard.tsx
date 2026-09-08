@@ -6,6 +6,7 @@ import {
 } from "@/lib/normalizeResearchReport";
 import { RESEARCH_STEPS, type ResearchStepId } from "@/lib/research/deepResearchShared";
 import ToolCard from "./primitives/ToolCard";
+import MegsyStar from "@/components/branding/MegsyStar";
 import { detectLang } from "@/lib/detectLang";
 
 interface DeepResearchCardProps {
