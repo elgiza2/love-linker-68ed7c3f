@@ -96,6 +96,11 @@ export default function ComputerTaskCard({ taskId }: Props) {
   }, [running, liveUrl, taskId, task?.progress, events]);
   useEffect(() => () => clearComputerLiveView(taskId), [taskId]);
 
+  // Coding runs keep the computer screen hidden until the user asks for it.
+  const isCoding = /\b(code|coding|website|landing page|app|build|html|css|react)\b|كود|برمج|موقع|صفحة هبوط|تطبيق/i.test(
+    task?.prompt || "",
+  );
+
   const trace = (
     <AgentTrace
       events={events}
@@ -104,8 +109,10 @@ export default function ComputerTaskCard({ taskId }: Props) {
       startedAt={task?.created_at ?? events[0]?.created_at ?? null}
       endedAt={running ? null : (task?.updated_at ?? events.at(-1)?.created_at ?? null)}
       liveUrl={liveUrl}
+      screenDefaultOpen={!isCoding}
     />
   );
+
 
   if (running) {
     return <div className="my-4 flex w-full flex-col">{trace}</div>;

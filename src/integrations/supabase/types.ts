@@ -2488,6 +2488,7 @@ export type Database = {
           message_id: string | null
           progress: number | null
           prompt: string | null
+          provider_session_id: string | null
           provider_task_id: string | null
           result_text: string | null
           status: string
@@ -2504,6 +2505,7 @@ export type Database = {
           message_id?: string | null
           progress?: number | null
           prompt?: string | null
+          provider_session_id?: string | null
           provider_task_id?: string | null
           result_text?: string | null
           status?: string
@@ -2520,6 +2522,7 @@ export type Database = {
           message_id?: string | null
           progress?: number | null
           prompt?: string | null
+          provider_session_id?: string | null
           provider_task_id?: string | null
           result_text?: string | null
           status?: string

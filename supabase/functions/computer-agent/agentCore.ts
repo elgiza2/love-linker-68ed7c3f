@@ -517,6 +517,23 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       const conversationId = payload.conversation_id ?? null;
       const memory = await loadMemory(supabase, user.id, conversationId);
 
+      // Continuity: every message of the same app conversation runs inside the
+      // SAME upstream browser session, so a follow-up continues the previous
+      // work instead of opening a brand new conversation on the provider.
+      let reuseSession: string | null = null;
+      if (conversationId) {
+        const { data: prev } = await supabase
+          .from("computer_tasks")
+          .select("provider_session_id")
+          .eq("user_id", user.id)
+          .eq("conversation_id", conversationId)
+          .not("provider_session_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        reuseSession = (prev?.[0]?.provider_session_id as string | undefined) || null;
+      }
+
+
       const { data: inserted, error: insErr } = await supabase
         .from("computer_tasks")
         .insert({
@@ -551,16 +568,29 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       ];
 
 
+      const startBody = (llm: string | undefined, session: string | null) => ({
+        task: fullPrompt.slice(0, 50_000),
+        llm,
+        maxSteps: 100,
+        vision: "auto",
+        ...(session ? { sessionId: session } : {}),
+      });
+
       let res = await callUpstream(supabase, {
         path: "/tasks",
         method: "POST",
-        body: {
-          task: fullPrompt.slice(0, 50_000),
-          llm: llmCandidates[0],
-          maxSteps: 100,
-          vision: "auto",
-        },
+        body: startBody(llmCandidates[0], reuseSession),
       });
+      // A reused session can be closed upstream; fall back to a fresh one
+      // rather than failing the whole turn.
+      if (!res.ok && reuseSession) {
+        reuseSession = null;
+        res = await callUpstream(supabase, {
+          path: "/tasks",
+          method: "POST",
+          body: startBody(llmCandidates[0], null),
+        });
+      }
       for (let i = 1; i < llmCandidates.length && !res.ok; i += 1) {
         const failMsg = (res as UpstreamFail).message ?? "";
         if (!/not available on the|body.,.llm|Input should be/i.test(failMsg)) break;
@@ -569,14 +599,10 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         res = await callUpstream(supabase, {
           path: "/tasks",
           method: "POST",
-          body: {
-            task: fullPrompt.slice(0, 50_000),
-            llm: llmCandidates[i],
-            maxSteps: 100,
-            vision: "auto",
-          },
+          body: startBody(llmCandidates[i], reuseSession),
         });
       }
+
 
 
       if (!res.ok) {
@@ -607,10 +633,14 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           .eq("id", taskId);
         return { status: 200, body: { task_id: taskId, status: "failed", error: "provider_error" } };
       }
+      const createdSession =
+        String(res.data?.sessionId ?? res.data?.session_id ?? "") || reuseSession || null;
       await supabase
         .from("computer_tasks")
         .update({
           provider_task_id: providerId || null,
+          provider_session_id: createdSession,
+
           // key_id is a uuid FK to manus_keys, so browser-use / shared-pool /
           // env keys stay null.
           key_id: /^[0-9a-f-]{36}$/i.test(res.key.id) && !res.key.id.startsWith("pool:")
@@ -669,6 +699,12 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       }
       let liveUrl: string | null = null;
       const sessionId = String(res.data?.sessionId ?? res.data?.session_id ?? "");
+      if (sessionId && sessionId !== task.provider_session_id) {
+        await supabase
+          .from("computer_tasks")
+          .update({ provider_session_id: sessionId })
+          .eq("id", task.id);
+      }
       if (sessionId && !["done", "failed"].includes(info.status)) {
         const session = await callUpstream(
           supabase,
@@ -677,6 +713,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         );
         if (session.ok) liveUrl = String(session.data?.liveUrl ?? session.data?.live_url ?? "") || null;
       }
+
       // Persist any new steps. Deduped on the line itself, so a long run whose
       // upstream step window has scrolled past never loses or repeats history.
       const existing = await listEvents(supabase, task.id);

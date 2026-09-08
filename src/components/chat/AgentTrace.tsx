@@ -18,7 +18,6 @@ import {
   Clock,
   Globe,
   Keyboard,
-  Loader2,
   MousePointerClick,
   Save,
   Search,
@@ -26,6 +25,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { ComputerEvent } from "@/lib/computer/client";
+import MegsyStar from "@/components/branding/MegsyStar";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -35,8 +35,11 @@ interface Props {
   startedAt?: string | null;
   endedAt?: string | null;
   liveUrl?: string | null;
+  /** Coding runs start with the computer screen hidden. */
+  screenDefaultOpen?: boolean;
   className?: string;
 }
+
 
 function formatDuration(ms: number): string {
   const total = Math.max(1, Math.round(ms / 1000));
@@ -75,12 +78,14 @@ export default function AgentTrace({
   startedAt,
   endedAt,
   liveUrl,
+  screenDefaultOpen = true,
   className,
 }: Props) {
   // Finished runs start collapsed behind the "Worked for …" button.
   const [open, setOpen] = useState(false);
-  const [screenOpen, setScreenOpen] = useState(true);
+  const [screenOpen, setScreenOpen] = useState(screenDefaultOpen);
   const listRef = useRef<HTMLDivElement | null>(null);
+
 
   // Auto-follow the newest line while the agent is working.
   useEffect(() => {
@@ -164,10 +169,16 @@ export default function AgentTrace({
 
         {running && (
           <div className="flex items-center gap-2 pt-0.5 text-[13px] text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            <span>{status?.trim() || "Thinking…"}</span>
+            <MegsyStar
+              className="h-3.5 w-3.5 shrink-0 text-[var(--megsy-blue)] motion-safe:animate-pulse"
+              aria-hidden
+            />
+            <span className="ai-shimmer font-medium motion-reduce:animate-none">
+              {status?.trim() || "Thinking…"}
+            </span>
           </div>
         )}
+
       </div>
     </div>
   );
@@ -205,19 +216,15 @@ export default function AgentTrace({
 
   return (
     <div className={cn("my-3 w-full", className)}>
-      {/* While the agent works the trace is open by itself; the toggle only
-          shows up once there is a finished run to fold away. */}
-      {running ? (
-        <div className="flex items-center gap-2 text-[13.5px] font-medium text-foreground/80">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-          <span>Working</span>
-        </div>
-      ) : (
+      {/* While the agent works the steps stand on their own — no button. The
+          "Worked for …" toggle only appears once the run has finished. */}
+      {!running && (
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="flex items-center gap-1.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
+          <MegsyStar className="h-3.5 w-3.5 shrink-0 text-[var(--megsy-blue)]" aria-hidden />
           <span>{elapsedMs ? `Worked for ${formatDuration(elapsedMs)}` : "Worked"}</span>
           {open ? (
             <ChevronDown className="h-3.5 w-3.5" />
@@ -228,7 +235,8 @@ export default function AgentTrace({
       )}
 
       {showList && list}
-      {running && screenOpen !== undefined && screen}
+      {(running || open) && screen}
     </div>
   );
 }
+
