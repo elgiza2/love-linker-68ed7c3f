@@ -44,23 +44,6 @@ export async function runComputerTurn({
   const prompt = stripComputerMention(text);
   const assistantClientId = `assistant-${localTurnId}`;
 
-  // One computer run at a time — but a new request must never be swallowed.
-  // Any run still marked active is stopped first, then this turn continues.
-  const { getActiveComputerRun, clearActiveComputerRun: dropRun } = await import(
-    "@/lib/computer/activeRun"
-  );
-  const previousRun = getActiveComputerRun();
-  if (previousRun) {
-    try {
-      const { stopComputerTask } = await import("@/lib/computer/client");
-      if (previousRun !== PENDING_COMPUTER_RUN) await stopComputerTask(previousRun);
-    } catch {
-      /* the old run is being abandoned either way */
-    }
-    dropRun(previousRun);
-  }
-
-
   const computerTool: ToolPart = {
     id: `computer-${localTurnId}`,
     name: "megsy_computer",
@@ -91,9 +74,20 @@ export async function runComputerTurn({
       if (userMessageId) ownInsertedIdsRef.current.add(userMessageId);
     }
 
-    // 1 — model-written intro streamed into the assistant bubble.
+    // Start the durable Browser Use task immediately. Narration is generated in
+    // parallel, so the user never waits through two extra model calls before
+    // the real work begins.
+    const { createComputerTask, computerErrorMessage } = await import("@/lib/computer/client");
+    const taskPromise = createComputerTask({
+      prompt,
+      conversation_id: cid,
+      attachments,
+    });
+
+    // Model-written intro streamed into the assistant bubble and never removed.
     let intro = "";
-    try {
+    const introPromise = (async () => {
+      try {
       const { generateTurnPreamble } = await import("./turnPreamble");
       await generateTurnPreamble({
         kind: "computer",
@@ -106,39 +100,39 @@ export async function runComputerTurn({
           );
         },
       });
-    } catch {
-      /* no intro — start right away */
-    }
+      } catch {
+        /* the task has already started; narration is optional */
+      }
+    })();
 
-    // 2 — short plan, shown above the live screen while the run starts.
+    // A short plan is also prepared while the task is starting.
     let plan: string[] = [];
+    const planPromise = (async () => {
+      try {
+        const { generateRunPlan } = await import("@/lib/computer/narration");
+        plan = await generateRunPlan(prompt || text, cid);
+        if (plan.length) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.clientId === assistantClientId ? { ...m, computerPlan: plan } : m,
+            ),
+          );
+        }
+      } catch {
+        /* the live provider events are sufficient */
+      }
+    })();
+
     try {
-      const { generateRunPlan } = await import("@/lib/computer/narration");
-      plan = await generateRunPlan(prompt || text, cid);
-      if (plan.length) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.clientId === assistantClientId ? { ...m, computerPlan: plan } : m,
-          ),
+      const task = await taskPromise;
+      if (!task?.task_id || task.status === "failed") {
+        throw new Error(
+          computerErrorMessage(task?.error, task?.message) ||
+            "تعذّر بدء المهمة على الكمبيوتر. حاول تاني.",
         );
       }
-    } catch {
-      /* plan is optional */
-    }
-
-    // 3 — start the Browser Use task. This is the stable computer runtime;
-    // long-run remains available for other autonomous workflows.
-    try {
-      const { createComputerTask, computerErrorMessage } = await import("@/lib/computer/client");
-      const task = await createComputerTask({
-        prompt,
-        conversation_id: cid,
-        attachments,
-      });
-      if (!task?.task_id || task.status === "failed") {
-        throw new Error(computerErrorMessage(task?.error) || "تعذّر بدء المهمة على الكمبيوتر. حاول تاني.");
-      }
       setActiveComputerRun(task.task_id);
+      await Promise.allSettled([introPromise, planPromise]);
       let assistantId: string | undefined;
       if (cid) {
         assistantId = await saveMessage(cid, "assistant", intro, undefined, {

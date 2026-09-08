@@ -160,7 +160,7 @@ const ThinkingTrace = ({
   const pulse = running ? "motion-safe:animate-pulse" : "";
 
   // ── Used-tools timeline (computer / coding / long tasks) ──────────────────
-  if (variant === "tools") {
+  if (variant === "tools" || variant === "default") {
     const summary = isAr
       ? `الأدوات المستخدمة · ${stepLines.length} ${stepLines.length === 1 ? "خطوة" : "خطوات"}`
       : `Thinking · ${stepLines.length} ${stepLines.length === 1 ? "step" : "steps"}`;

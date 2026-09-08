@@ -19,6 +19,7 @@ export interface ComputerTask {
   live_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  provider_session_id?: string | null;
 }
 
 export interface ComputerEvent {
@@ -77,7 +78,7 @@ export function createComputerTask(input: {
   message_id?: string | null;
   attachments?: string[];
 }) {
-  return call<{ task_id: string; status: string; error?: string }>({
+  return call<{ task_id: string; status: string; error?: string; message?: string }>({
     action: "create",
     ...input,
   });
@@ -92,7 +93,10 @@ export function stopComputerTask(taskId: string) {
 }
 
 /** Human-friendly message for backend failure codes (no provider names). */
-export function computerErrorMessage(code: string | null | undefined): string {
+export function computerErrorMessage(
+  code: string | null | undefined,
+  providerMessage?: string | null,
+): string {
   switch (code) {
     case "no_capacity":
       return "Computer agent is unavailable right now. Please try again shortly.";
@@ -101,7 +105,7 @@ export function computerErrorMessage(code: string | null | undefined): string {
     case "stopped":
       return "Task stopped.";
     case "provider_error":
-      return "The computer task couldn't be started. Please try again.";
+      return providerMessage?.trim() || "The computer task couldn't be started. Please try again.";
     default:
       return code ? "The computer task failed." : "";
   }
