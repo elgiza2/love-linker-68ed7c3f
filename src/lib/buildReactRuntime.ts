@@ -327,20 +327,30 @@ try { parent.postMessage({ type: 'megsy:runtime-ready' }, '*'); } catch(_) {}
     return path.replace(/\.ts$/, '.tsx').replace(/\.(m?js)$/, '.jsx');
   }
 
+  function babel(filename, code){
+    return Babel.transform(code, {
+      filename: filename,
+      presets: [
+        ['env', { modules: false, targets: { esmodules: true } }],
+        'react',
+        'typescript'
+      ],
+      sourceMaps: 'inline'
+    }).code;
+  }
+
   function transform(path, code){
     try{
-      var out = Babel.transform(code, {
-        filename: jsxFilename(path, code),
-        presets: [
-          ['env', { modules: false, targets: { esmodules: true } }],
-          'react',
-          'typescript'
-        ],
-        sourceMaps: 'inline'
-      }).code;
-      return out;
+      return babel(jsxFilename(path, code), code);
     }catch(e){
-      throw new Error('Babel failed for ' + path + ': ' + e.message);
+      // Last resort: force the JSX/TSX parser. Detection can miss JSX that
+      // starts on a later line or inside a generic, and a whole page failing
+      // to render is far worse than an unnecessary re-parse.
+      try{
+        return babel(path.replace(/\.[^.]+$/, '') + '.tsx', code);
+      }catch(e2){
+        throw new Error('Babel failed for ' + path + ': ' + e2.message);
+      }
     }
   }
 

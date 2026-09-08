@@ -291,7 +291,14 @@ const formatRawUrls = (text: string): string => {
       return part.replace(/(?<!\]\()https?:\/\/[^\s<>")\]]+/g, (url) => {
         const cleanUrl = url.replace(/[.,;:!?]+$/, "");
         try {
-          const domain = new URL(cleanUrl).hostname.replace("www.", "");
+          const parsed = new URL(cleanUrl);
+          const domain = parsed.hostname.replace("www.", "");
+          // Links we generate ourselves (published sites, documents, slides)
+          // all live on one host, so a bare domain label tells the user
+          // nothing — keep the path so every link stays distinguishable.
+          if (/^\/(s|vs|document|slides|research|share)\//.test(parsed.pathname)) {
+            return `[${domain}${parsed.pathname}](${cleanUrl})`;
+          }
           return `[${domain}](${cleanUrl})`;
         } catch {
           return cleanUrl;

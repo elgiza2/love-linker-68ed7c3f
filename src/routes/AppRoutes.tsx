@@ -5,6 +5,7 @@ import {
   // chat
   ChatPage,
   SharedChatPage,
+  SharedSitePage,
   ResearchPreviewPage,
   SlidesPreviewPage,
   ManusKeysPage,
@@ -232,7 +233,7 @@ export const AppRoutes = ({ currentUserId }: { currentUserId: string | null }) =
     <Route path="/promo/:code" element={toPricing} />
     <Route path="/eg" element={toChat} />
     <Route path="/eg/*" element={toChat} />
-    <Route path="/s/:slug" element={toChat} />
+    <Route path="/s/:slug" element={<SharedSitePage />} />
     <Route path="/l/*" element={toPricing} />
     <Route path="/ai/*" element={<LegacyAiRedirect />} />
     <Route path="/tools/*" element={<LegacyToolsRedirect />} />
