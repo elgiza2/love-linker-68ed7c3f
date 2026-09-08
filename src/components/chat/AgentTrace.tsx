@@ -18,7 +18,6 @@ import {
   Clock,
   Globe,
   Keyboard,
-  Loader2,
   MousePointerClick,
   Save,
   Search,
