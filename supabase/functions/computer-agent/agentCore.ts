@@ -675,6 +675,13 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         if (url) resolvedFiles.push({ name: f.name, url });
       }
 
+      // Coding tasks often end with the code written straight into the answer
+      // and no upstream artifact. Those blocks become real downloadable files
+      // so the user is never told "done" with nothing to open.
+      if (!resolvedFiles.length && info.resultText) {
+        resolvedFiles.push(...inlineFilesFromText(info.resultText));
+      }
+
       const patch = {
         status: info.status,
         progress: info.progress,
@@ -683,6 +690,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         updated_at: new Date().toISOString(),
       };
       await supabase.from("computer_tasks").update(patch).eq("id", task.id);
+
 
       if (info.status === "done") {
         const memory = await loadMemory(supabase, user.id, task.conversation_id);
