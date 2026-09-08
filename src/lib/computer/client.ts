@@ -17,6 +17,8 @@ export interface ComputerTask {
   error: string | null;
   prompt: string;
   live_url?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface ComputerEvent {
@@ -25,7 +27,11 @@ export interface ComputerEvent {
   detail: string | null;
   url: string | null;
   created_at: string;
+  kind?: string | null;
+  duration?: number | null;
+  screenshot_url?: string | null;
 }
+
 
 const SIGN_IN_MESSAGE = "سجّل الدخول أولاً لتشغيل مهام الكمبيوتر. / Please sign in to run computer tasks.";
 
