@@ -11,15 +11,15 @@ export default function ConversationTaskDot({ state }: { state?: TaskIndicator }
   if (state === "running") {
     return (
       <MegsyStar
-        className="h-3.5 w-3.5 shrink-0 text-amber-400 motion-safe:animate-spin-slow"
-        aria-label="Task running"
+        className="h-3.5 w-3.5 shrink-0 text-amber-400 motion-safe:animate-spin [animation-duration:2.6s]"
+        title="Task running"
       />
     );
   }
   return (
     <span
-      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--megsy-blue,theme(colors.primary.DEFAULT))]"
-      aria-label="Task finished"
+      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--megsy-blue)]"
+      title="Task finished"
     />
   );
 }
