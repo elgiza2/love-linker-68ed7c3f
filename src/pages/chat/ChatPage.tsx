@@ -1511,6 +1511,44 @@ const ChatPage = () => {
       return;
     }
 
+    // ── One agent for everything ────────────────────────────────────────────
+    // The separate main agent, document writer, research engine and coder are
+    // gone: those requests all run on the same cloud agent, which browses, runs
+    // code, writes files and keeps working even if this tab is closed.
+    {
+      const { cloudAgentTarget, buildCloudAgentPrompt } = await import("@/lib/computer/agentModes");
+      const target = cloudAgentTarget(chatMode, selectedAgent?.id);
+      if (target && text.trim()) {
+        const agentTurnId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random()}`;
+        const agentUserMsg: Message = {
+          role: "user",
+          clientId: `user-${agentTurnId}`,
+          content: text,
+          mode: chatMode,
+        } as Message;
+        try {
+          await runComputerTurn({
+            text: buildCloudAgentPrompt(target, text),
+            userMsg: agentUserMsg,
+            localTurnId: agentTurnId,
+            attachments: attachedFiles.filter((f) => f.type === "image").map((f) => f.data),
+            setMessages,
+            setInput,
+            setAttachedFiles,
+            createOrUpdateConversation,
+            saveMessage,
+            ownInsertedIdsRef,
+          });
+        } finally {
+          isSubmittingRef.current = false;
+        }
+        return;
+      }
+    }
+
     // Code mode → run the inline Megsy Coder agent (Replit/Lovable style) inside the chat feed.
     if (chatMode === "code" && text.trim()) {
       const promptText = text.trim();

@@ -150,29 +150,41 @@ export default function ComputerTaskCard({ taskId }: Props) {
       <ThinkingTrace variant="tools" steps={traceSteps} text={traceText} tool="browser" />
       {task?.result_text && <ChatMessage role="assistant" content={task.result_text} />}
 
-
       {files.length > 0 && (
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {files.map((f) => {
             const isImage = /\.(png|jpe?g|webp|gif|avif)$/i.test(f.url) || f.type?.startsWith("image/");
             const isVideo = /\.(mp4|webm|mov)$/i.test(f.url) || f.type?.startsWith("video/");
+            if (isImage || isVideo) {
+              return (
+                <div
+                  key={f.url}
+                  className="w-full overflow-hidden rounded-xl border border-border/40"
+                >
+                  {isImage ? (
+                    <img src={f.url} alt={f.name} loading="lazy" className="max-h-64 w-full object-cover" />
+                  ) : (
+                    <video src={f.url} controls className="max-h-64 w-full" />
+                  )}
+                </div>
+              );
+            }
+            const ext = (f.name.split(".").pop() || "file").toLowerCase().slice(0, 4);
             return (
-              <div key={f.url} className="overflow-hidden rounded-xl border border-border/40">
-                {isImage ? (
-                  <img src={f.url} alt={f.name} loading="lazy" className="max-h-64 w-full object-cover" />
-                ) : isVideo ? (
-                  <video src={f.url} controls className="max-h-64 w-full" />
-                ) : (
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block truncate px-3 py-2 text-[12.5px] text-foreground/85 hover:bg-foreground/5"
-                  >
-                    {f.name}
-                  </a>
-                )}
-              </div>
+              <a
+                key={f.url}
+                href={f.url}
+                target="_blank"
+                rel="noreferrer"
+                download={f.name}
+                title={f.name}
+                className="inline-flex max-w-full items-center gap-2 rounded-lg bg-foreground/[0.06] px-2.5 py-1.5 text-[12.5px] text-foreground/90 transition-colors hover:bg-foreground/10"
+              >
+                <span className="grid h-[18px] shrink-0 place-items-center rounded bg-primary/85 px-1 text-[9px] font-semibold uppercase text-primary-foreground">
+                  {ext}
+                </span>
+                <span className="truncate">{f.name}</span>
+              </a>
             );
           })}
         </div>
@@ -180,3 +192,4 @@ export default function ComputerTaskCard({ taskId }: Props) {
     </div>
   );
 }
+
