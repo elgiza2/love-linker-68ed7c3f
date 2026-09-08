@@ -189,6 +189,7 @@ const AnimatedInput = ({
         return;
       }
       if (value.trim() && !disabled) handleSendWithSlash();
+
     }
   };
 
@@ -470,7 +471,10 @@ const AnimatedInput = ({
             <div className="flex-1" />
 
             <AnimatePresence mode="popLayout" initial={false}>
-              {isLoading ? (
+              {/* Typing a new message must always be sendable — the stop button
+                  only takes over while the composer is empty. */}
+              {isLoading && !hasText ? (
+
                 <Button
                   key="stop"
                   type="button"
