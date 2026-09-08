@@ -462,6 +462,48 @@ function extractProgress(data: any): {
   return { status, progress, resultText, files, events };
 }
 
+/**
+ * Turn fenced code blocks in a final answer into downloadable data-URL files.
+ * A block is only exported when a filename is discoverable, either on the fence
+ * info string (```html index.html) or on the line just above it.
+ */
+function inlineFilesFromText(text: string): { name: string; url: string }[] {
+  const out: { name: string; url: string }[] = [];
+  const lines = text.split("\n");
+  const nameRe = /([\w.\-/]+\.(?:html?|css|js|jsx|ts|tsx|json|py|md|txt|csv|sql|sh|yml|yaml))/i;
+  const extByLang: Record<string, string> = {
+    html: "html", css: "css", js: "js", javascript: "js", ts: "ts", typescript: "ts",
+    tsx: "tsx", jsx: "jsx", json: "json", python: "py", py: "py", md: "md",
+    markdown: "md", sql: "sql", bash: "sh", sh: "sh", yaml: "yml", yml: "yml",
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const fence = lines[i].match(/^\s*```+\s*(.*)$/);
+    if (!fence) { i += 1; continue; }
+    const info = (fence[1] || "").trim();
+    const body: string[] = [];
+    i += 1;
+    while (i < lines.length && !/^\s*```/.test(lines[i])) { body.push(lines[i]); i += 1; }
+    i += 1;
+    const code = body.join("\n").trim();
+    if (!code) continue;
+    const above = lines.slice(Math.max(0, i - body.length - 4), Math.max(0, i - body.length - 1)).join(" ");
+    const name =
+      info.match(nameRe)?.[1] ||
+      above.match(nameRe)?.[1] ||
+      (extByLang[info.split(/\s+/)[0].toLowerCase()]
+        ? `file-${out.length + 1}.${extByLang[info.split(/\s+/)[0].toLowerCase()]}`
+        : "");
+    if (!name) continue;
+    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(code)));
+    out.push({ name, url: `data:text/plain;charset=utf-8;base64,${b64}` });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+
+
 export async function handleComputerAgent(payload: ComputerPayload | null): Promise<ComputerResult> {
   if (!payload?.action) return { status: 400, body: { error: "Missing action" } };
   const supabase = admin();
