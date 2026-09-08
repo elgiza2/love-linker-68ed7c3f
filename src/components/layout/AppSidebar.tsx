@@ -840,9 +840,10 @@ const AppSidebar = ({
                             }
                             aria-label={conv.title || "Untitled"}
                             title={conv.title || "Untitled"}
-                            className="w-full text-start px-3 py-2 rounded-full text-[13px] truncate transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                            className="flex w-full items-center gap-2 text-start px-3 py-2 rounded-full text-[13px] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
                           >
-                            <span className="truncate">{conv.title || "Untitled"}</span>
+                            <span className="min-w-0 flex-1 truncate">{conv.title || "Untitled"}</span>
+                            <ConversationTaskDot state={taskIndicators[conv.id]} />
                           </button>
                         </li>
                       );
