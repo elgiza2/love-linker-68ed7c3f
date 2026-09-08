@@ -43,6 +43,15 @@ const UsagePage = () => {
   const [loading, setLoading] = useState(true);
 
   const planLabel = (plan || "free").toLowerCase() === "free" ? "Free" : (plan || "").toUpperCase();
+  const isPaidPlan = (plan || "free").toLowerCase() !== "free";
+  // Very large balances read as noise; show them grouped, and label huge
+  // paid-plan balances as Unlimited.
+  const creditsLabel =
+    credits === null
+      ? "—"
+      : isPaidPlan && credits >= 100_000_000
+        ? "Unlimited"
+        : credits.toLocaleString("en-US");
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +102,7 @@ const UsagePage = () => {
             <div className="usg-plan">
               <span className="usg-plan-name">{planLabel}</span>
               <button type="button" className="usg-cta" onClick={() => navigate("/pricing")}>
-                Upgrade
+                {isPaidPlan ? "Manage" : "Upgrade"}
               </button>
             </div>
 
@@ -102,12 +111,12 @@ const UsagePage = () => {
               <span className="usg-llabel">Credits</span>
               <HelpCircle className="usg-lhelp" />
 
-              <span className="usg-lvalue">{credits ?? 0}</span>
+              <span className="usg-lvalue">{creditsLabel}</span>
             </div>
 
             <div className="usg-line usg-line-sub">
               <span className="usg-llabel usg-muted">Free credits</span>
-              <span className="usg-lvalue usg-muted">{credits ?? 0}</span>
+              <span className="usg-lvalue usg-muted">{creditsLabel}</span>
             </div>
             <div className="usg-line">
               <CalendarClock className="usg-licon" />
