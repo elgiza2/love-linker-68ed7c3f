@@ -568,16 +568,29 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       ];
 
 
+      const startBody = (llm: string | undefined, session: string | null) => ({
+        task: fullPrompt.slice(0, 50_000),
+        llm,
+        maxSteps: 100,
+        vision: "auto",
+        ...(session ? { sessionId: session } : {}),
+      });
+
       let res = await callUpstream(supabase, {
         path: "/tasks",
         method: "POST",
-        body: {
-          task: fullPrompt.slice(0, 50_000),
-          llm: llmCandidates[0],
-          maxSteps: 100,
-          vision: "auto",
-        },
+        body: startBody(llmCandidates[0], reuseSession),
       });
+      // A reused session can be closed upstream; fall back to a fresh one
+      // rather than failing the whole turn.
+      if (!res.ok && reuseSession) {
+        reuseSession = null;
+        res = await callUpstream(supabase, {
+          path: "/tasks",
+          method: "POST",
+          body: startBody(llmCandidates[0], null),
+        });
+      }
       for (let i = 1; i < llmCandidates.length && !res.ok; i += 1) {
         const failMsg = (res as UpstreamFail).message ?? "";
         if (!/not available on the|body.,.llm|Input should be/i.test(failMsg)) break;
@@ -586,14 +599,10 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         res = await callUpstream(supabase, {
           path: "/tasks",
           method: "POST",
-          body: {
-            task: fullPrompt.slice(0, 50_000),
-            llm: llmCandidates[i],
-            maxSteps: 100,
-            vision: "auto",
-          },
+          body: startBody(llmCandidates[i], reuseSession),
         });
       }
+
 
 
       if (!res.ok) {
