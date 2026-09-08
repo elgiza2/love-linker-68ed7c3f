@@ -50,6 +50,41 @@ const DocumentPreviewPage = () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  /** Word (.doc) export — Word opens this HTML-based format natively. */
+  const downloadWord = () => {
+    if (!patched) return;
+    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>${patched}</body></html>`;
+    const blob = new Blob(["\ufeff", doc], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filenameBase}.doc`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Word file downloaded");
+  };
+
+  /** Excel export: every table in the document becomes a sheet-ready file. */
+  const downloadExcel = () => {
+    if (!patched) return;
+    const parsed = new DOMParser().parseFromString(patched, "text/html");
+    const tables = Array.from(parsed.querySelectorAll("table"));
+    if (!tables.length) {
+      toast.error("This document has no table to export");
+      return;
+    }
+    const body = tables.map((t) => t.outerHTML).join("<br/>");
+    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>${body}</body></html>`;
+    const blob = new Blob(["\ufeff", doc], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filenameBase}.xls`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Excel file downloaded");
+  };
+
   const downloadPdf = async () => {
     if (!html) return;
     setExporting(true);
@@ -71,12 +106,16 @@ const DocumentPreviewPage = () => {
       setTimeout(() => URL.revokeObjectURL(url), 2000);
       toast.success("PDF downloaded", { id: "pdf-export" });
     } catch (e) {
+      // No PDF service configured (or it failed): fall back to the browser's
+      // own "Save as PDF" print dialog so the user still gets a real file.
       console.error("[docs] downloadPdf failed", e);
-      toast.error("Could not create PDF — try downloading as HTML", { id: "pdf-export" });
+      toast.info("Opening the print dialog — choose “Save as PDF”.", { id: "pdf-export" });
+      await printDoc();
     } finally {
       setExporting(false);
     }
   };
+
 
   const printDoc = async () => {
     if (!patched) return;
@@ -146,26 +185,39 @@ const DocumentPreviewPage = () => {
 
       {/* Bottom action bar */}
       <div
-        className="sticky bottom-0 z-10 flex items-center justify-center gap-2 border-t border-border/60 bg-background/95 px-3 pt-2 backdrop-blur"
+        className="sticky bottom-0 z-10 flex flex-wrap items-center justify-center gap-2 border-t border-border/60 bg-background/95 px-3 pt-2 backdrop-blur"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" }}
       >
         <button
           onClick={downloadPdf}
           disabled={!html || exporting}
-          className="inline-flex h-10 items-center rounded-full px-5 text-[12px] font-semibold transition hover:opacity-90 disabled:opacity-45"
-          style={{ backgroundColor: "hsl(var(--background))", color: "#ffffff" }}
+          className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-[12px] font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-45"
         >
-          {exporting ? "Preparing…" : "Download as PDF"}
+          {exporting ? "Preparing…" : "PDF"}
+        </button>
+        <button
+          onClick={downloadWord}
+          disabled={!html}
+          className="inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-[12px] font-semibold text-foreground transition hover:bg-muted disabled:opacity-45"
+        >
+          Word
+        </button>
+        <button
+          onClick={downloadExcel}
+          disabled={!html}
+          className="inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-[12px] font-semibold text-foreground transition hover:bg-muted disabled:opacity-45"
+        >
+          Excel
         </button>
         <button
           onClick={downloadHtml}
           disabled={!html}
-          className="inline-flex h-10 items-center rounded-full border px-5 text-[12px] font-semibold transition disabled:opacity-45"
-          style={{ backgroundColor: "#ffffff", borderColor: "rgba(0,0,0,0.12)", color: "#000000" }}
+          className="inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-[12px] font-semibold text-foreground transition hover:bg-muted disabled:opacity-45"
         >
-          Download as HTML
+          HTML
         </button>
       </div>
+
     </main>
   );
 };
