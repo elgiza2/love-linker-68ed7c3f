@@ -633,10 +633,14 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           .eq("id", taskId);
         return { status: 200, body: { task_id: taskId, status: "failed", error: "provider_error" } };
       }
+      const createdSession =
+        String(res.data?.sessionId ?? res.data?.session_id ?? "") || reuseSession || null;
       await supabase
         .from("computer_tasks")
         .update({
           provider_task_id: providerId || null,
+          provider_session_id: createdSession,
+
           // key_id is a uuid FK to manus_keys, so browser-use / shared-pool /
           // env keys stay null.
           key_id: /^[0-9a-f-]{36}$/i.test(res.key.id) && !res.key.id.startsWith("pool:")
