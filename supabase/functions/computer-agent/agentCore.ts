@@ -446,16 +446,63 @@ function extractProgress(data: any): {
 
 
 
-  const rawFiles: any[] = Array.isArray(data?.outputFiles) ? data.outputFiles : [];
+  const rawFiles: any[] = Array.isArray(data?.outputFiles)
+    ? data.outputFiles
+    : Array.isArray((data as any)?.output_files)
+      ? (data as any).output_files
+      : [];
   const files = rawFiles
     .filter((f) => f?.id)
-    .map((f) => ({ id: String(f.id), name: String(f?.fileName || "file") }));
+    .map((f) => ({ id: String(f.id), name: String(f?.fileName || f?.file_name || "file") }));
+
 
   const resultText = typeof data?.output === "string" && data.output ? data.output : null;
 
   const progress = events.length ? events[events.length - 1].title : null;
   return { status, progress, resultText, files, events };
 }
+
+/**
+ * Turn fenced code blocks in a final answer into downloadable data-URL files.
+ * A block is only exported when a filename is discoverable, either on the fence
+ * info string (```html index.html) or on the line just above it.
+ */
+function inlineFilesFromText(text: string): { name: string; url: string }[] {
+  const out: { name: string; url: string }[] = [];
+  const lines = text.split("\n");
+  const nameRe = /([\w.\-/]+\.(?:html?|css|js|jsx|ts|tsx|json|py|md|txt|csv|sql|sh|yml|yaml))/i;
+  const extByLang: Record<string, string> = {
+    html: "html", css: "css", js: "js", javascript: "js", ts: "ts", typescript: "ts",
+    tsx: "tsx", jsx: "jsx", json: "json", python: "py", py: "py", md: "md",
+    markdown: "md", sql: "sql", bash: "sh", sh: "sh", yaml: "yml", yml: "yml",
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const fence = lines[i].match(/^\s*```+\s*(.*)$/);
+    if (!fence) { i += 1; continue; }
+    const info = (fence[1] || "").trim();
+    const body: string[] = [];
+    i += 1;
+    while (i < lines.length && !/^\s*```/.test(lines[i])) { body.push(lines[i]); i += 1; }
+    i += 1;
+    const code = body.join("\n").trim();
+    if (!code) continue;
+    const above = lines.slice(Math.max(0, i - body.length - 4), Math.max(0, i - body.length - 1)).join(" ");
+    const name =
+      info.match(nameRe)?.[1] ||
+      above.match(nameRe)?.[1] ||
+      (extByLang[info.split(/\s+/)[0].toLowerCase()]
+        ? `file-${out.length + 1}.${extByLang[info.split(/\s+/)[0].toLowerCase()]}`
+        : "");
+    if (!name) continue;
+    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(code)));
+    out.push({ name, url: `data:text/plain;charset=utf-8;base64,${b64}` });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+
 
 export async function handleComputerAgent(payload: ComputerPayload | null): Promise<ComputerResult> {
   if (!payload?.action) return { status: 400, body: { error: "Missing action" } };
@@ -670,6 +717,13 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         if (url) resolvedFiles.push({ name: f.name, url });
       }
 
+      // Coding tasks often end with the code written straight into the answer
+      // and no upstream artifact. Those blocks become real downloadable files
+      // so the user is never told "done" with nothing to open.
+      if (!resolvedFiles.length && info.resultText) {
+        resolvedFiles.push(...inlineFilesFromText(info.resultText));
+      }
+
       const patch = {
         status: info.status,
         progress: info.progress,
@@ -678,6 +732,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         updated_at: new Date().toISOString(),
       };
       await supabase.from("computer_tasks").update(patch).eq("id", task.id);
+
 
       if (info.status === "done") {
         const memory = await loadMemory(supabase, user.id, task.conversation_id);
