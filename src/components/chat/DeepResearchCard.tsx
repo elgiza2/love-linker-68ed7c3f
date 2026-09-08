@@ -60,7 +60,8 @@ const DeepResearchCard = ({
       >
         <div className={ar ? "text-right" : "text-left"}>
           <p className="mb-3 whitespace-pre-wrap break-words text-sm text-destructive">
-            {errorMessage || (ar ? "فشل البحث العميق. حاول تاني." : "Deep Research failed. Please try again.")}
+            {errorMessage ||
+              (ar ? "فشل البحث العميق. حاول تاني." : "Deep Research failed. Please try again.")}
           </p>
           {onRetry && (
             <button
