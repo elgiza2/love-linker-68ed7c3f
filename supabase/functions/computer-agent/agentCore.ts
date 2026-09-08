@@ -375,6 +375,8 @@ function extractProgress(data: any): {
         return "Scrolled the page";
       case "extract_structured_data":
       case "extract_content":
+      case "extract":
+      case "evaluate":
         return `Read the page for ${label(val("query") || "details")}`;
       case "write_file":
       case "save_file":
