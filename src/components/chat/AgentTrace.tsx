@@ -79,12 +79,14 @@ export default function AgentTrace({
   startedAt,
   endedAt,
   liveUrl,
+  screenDefaultOpen = true,
   className,
 }: Props) {
   // Finished runs start collapsed behind the "Worked for …" button.
   const [open, setOpen] = useState(false);
-  const [screenOpen, setScreenOpen] = useState(true);
+  const [screenOpen, setScreenOpen] = useState(screenDefaultOpen);
   const listRef = useRef<HTMLDivElement | null>(null);
+
 
   // Auto-follow the newest line while the agent is working.
   useEffect(() => {
