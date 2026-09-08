@@ -163,7 +163,7 @@ const ThinkingTrace = ({
   if (variant === "tools") {
     const summary = isAr
       ? `الأدوات المستخدمة · ${stepLines.length} ${stepLines.length === 1 ? "خطوة" : "خطوات"}`
-      : `Tools used · ${stepLines.length} ${stepLines.length === 1 ? "step" : "steps"}`;
+      : `Thinking · ${stepLines.length} ${stepLines.length === 1 ? "step" : "steps"}`;
 
     return (
       <div className={`mb-3 min-w-0 overflow-hidden ${className}`} dir={rtl ? "rtl" : undefined} data-tool-timeline>
