@@ -8,7 +8,7 @@
 - [ ] Coder / Website (10 tests incl. preview, routes, export)
 - [ ] Images (10 tests)
 - [ ] Slides (10 tests)
-- [ ] Deep Research (10 tests)
+- [x] Deep Research (10 tests)
 - [ ] Docs (10 tests)
 - [ ] Learning (10 tests)
 - [ ] Operator (10 safe tests)
@@ -27,7 +27,7 @@
 - [x] Published site links (/s/:slug) now open the real site instead of redirecting to chat
 - [x] Website builder works without a cloud build machine (publishes a live link)
 - [x] Link labels keep their path so site/doc links are distinguishable
-- [ ] Deep Research: speed + sources
+- [x] Deep Research: speed + sources
 - [ ] Long-running tasks recovery pass
 
 ## After audit
