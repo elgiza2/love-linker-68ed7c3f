@@ -319,7 +319,15 @@ function extractProgress(data: any): {
   progress: string | null;
   resultText: string | null;
   files: { id: string; name: string }[];
-  events: { title: string; detail?: string; url?: string }[];
+  events: {
+    title: string;
+    detail?: string;
+    url?: string;
+    kind: string;
+    duration?: number;
+    screenshot?: string;
+  }[];
+
 } {
   const status = normalizeStatus(data?.status);
   // Browser Use has shipped both camelCase and snake_case step payloads, and
@@ -406,19 +414,35 @@ function extractProgress(data: any): {
       )
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 200);
+        .slice(0, 400);
       const url = typeof e?.url === "string" ? e.url : undefined;
-      const out: { title: string; detail?: string; url?: string }[] = [];
-      if (thought) out.push({ title: thought, detail: url, url });
+      const shot = typeof e?.screenshotUrl === "string"
+        ? e.screenshotUrl
+        : typeof e?.screenshot_url === "string"
+          ? e.screenshot_url
+          : undefined;
+      const seconds = Number(e?.duration ?? e?.durationSeconds ?? e?.elapsed ?? 0) || undefined;
+      const out: {
+        title: string;
+        detail?: string;
+        url?: string;
+        kind: string;
+        duration?: number;
+        screenshot?: string;
+      }[] = [];
+      if (thought) {
+        out.push({ title: thought, detail: url, url, kind: "thought", duration: seconds, screenshot: shot });
+      }
       const actions = Array.isArray(e?.actions) ? e.actions : [];
       for (const a of actions) {
         const line = describeAction(a);
-        if (line) out.push({ title: line, detail: url, url });
+        if (line) out.push({ title: line, detail: url, url, kind: "action", screenshot: shot });
       }
       return out;
     })
     .filter((e) => !!e.title)
-    .slice(-120);
+    .slice(-160);
+
 
 
 
@@ -622,7 +646,11 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           title: e.title,
           detail: e.detail ?? null,
           url: e.url ?? null,
+          kind: e.kind,
+          duration: e.duration ?? null,
+          screenshot_url: e.screenshot ?? null,
         }));
+
       if (fresh.length) {
         const { error: evErr } = await supabase.from("computer_events").insert(fresh);
         if (evErr) console.error(`computer_events insert failed: ${evErr.message}`);
@@ -707,13 +735,16 @@ function publicTask(task: any) {
     files: Array.isArray(task.files) ? task.files : [],
     error: task.error ?? null,
     prompt: task.prompt,
+    created_at: task.created_at ?? null,
+    updated_at: task.updated_at ?? null,
   };
 }
+
 
 async function listEvents(supabase: SupabaseClient, taskId: string) {
   const { data } = await supabase
     .from("computer_events")
-    .select("id,title,detail,url,created_at")
+    .select("id,title,detail,url,created_at,kind,duration,screenshot_url")
     .eq("task_id", taskId)
     .order("created_at", { ascending: true });
   return data ?? [];

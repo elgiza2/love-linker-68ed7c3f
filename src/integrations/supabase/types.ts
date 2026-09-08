@@ -2415,7 +2415,10 @@ export type Database = {
         Row: {
           created_at: string
           detail: string | null
+          duration: number | null
           id: string
+          kind: string | null
+          screenshot_url: string | null
           task_id: string | null
           title: string | null
           url: string | null
@@ -2424,7 +2427,10 @@ export type Database = {
         Insert: {
           created_at?: string
           detail?: string | null
+          duration?: number | null
           id?: string
+          kind?: string | null
+          screenshot_url?: string | null
           task_id?: string | null
           title?: string | null
           url?: string | null
@@ -2433,7 +2439,10 @@ export type Database = {
         Update: {
           created_at?: string
           detail?: string | null
+          duration?: number | null
           id?: string
+          kind?: string | null
+          screenshot_url?: string | null
           task_id?: string | null
           title?: string | null
           url?: string | null

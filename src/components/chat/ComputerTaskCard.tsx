@@ -6,7 +6,7 @@
  * thinking trace above it, so this surface only carries what the task actually
  * produced (text + files) once it is finished.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   computerErrorMessage,
   pollComputerTask,
@@ -14,12 +14,11 @@ import {
   type ComputerTask,
   type ComputerEvent,
 } from "@/lib/computer/client";
-import ThinkingTrace from "@/components/chat/ThinkingTrace";
+import AgentTrace from "@/components/chat/AgentTrace";
 import ChatMessage from "@/components/chat/ChatMessage";
 
 import { clearActiveComputerRun, setActiveComputerRun } from "@/lib/computer/activeRun";
 import { clearComputerLiveView, setComputerLiveView } from "@/lib/computer/liveView";
-import { cleanTrace } from "@/lib/computer/traceCleanup";
 
 
 interface Props {
@@ -27,7 +26,8 @@ interface Props {
 }
 
 const POLL_MS = 3000;
-const TASK_TIMEOUT_MS = 15 * 60 * 1000;
+const TASK_TIMEOUT_MS = 45 * 60 * 1000;
+
 
 export default function ComputerTaskCard({ taskId }: Props) {
   const [task, setTask] = useState<ComputerTask | null>(null);
@@ -73,12 +73,6 @@ export default function ComputerTaskCard({ taskId }: Props) {
   const running =
     !timedOut && (!task || task.status === "pending" || task.status === "running" || task.status === "paused");
   const files = task?.files ?? [];
-  // Internal bookkeeping (checkpoints, raw errors, JSON) never reaches the chat.
-  const traceSteps = useMemo(() => cleanTrace(events.map((event) => event.title)), [events]);
-  const traceText = useMemo(
-    () => cleanTrace(events.map((event) => event.detail)).join("\n\n"),
-    [events],
-  );
 
   const liveUrl = task?.live_url ? `${task.live_url}${task.live_url.includes("?") ? "&" : "?"}view_only=true` : null;
 
@@ -98,21 +92,19 @@ export default function ComputerTaskCard({ taskId }: Props) {
   }, [running, liveUrl, taskId, task?.progress, events]);
   useEffect(() => () => clearComputerLiveView(taskId), [taskId]);
 
+  const trace = (
+    <AgentTrace
+      events={events}
+      running={running}
+      status={task?.progress || events.at(-1)?.title || ""}
+      startedAt={task?.created_at ?? events[0]?.created_at ?? null}
+      endedAt={running ? null : (task?.updated_at ?? events.at(-1)?.created_at ?? null)}
+      liveUrl={liveUrl}
+    />
+  );
+
   if (running) {
-    return (
-      <div className="my-4 flex w-full flex-col">
-        <ThinkingTrace
-          active
-          variant="tools"
-          status={task?.progress || events.at(-1)?.title || ""}
-          steps={traceSteps}
-          text={traceText}
-          tool="browser"
-          running
-          className="mb-0"
-        />
-      </div>
-    );
+    return <div className="my-4 flex w-full flex-col">{trace}</div>;
   }
 
   if (timedOut || task?.status === "failed") {
@@ -123,9 +115,7 @@ export default function ComputerTaskCard({ taskId }: Props) {
       "المهمة على الكمبيوتر اتوقفت قبل ما تخلص. جرّب تبعتها تاني بصيغة أوضح.";
     return (
       <div className="my-4 space-y-4">
-        {traceSteps.length > 0 && (
-          <ThinkingTrace variant="tools" steps={traceSteps} text={traceText} tool="browser" />
-        )}
+        {trace}
         <p className="text-[13px] leading-relaxed text-destructive">{reason}</p>
       </div>
     );
@@ -134,9 +124,7 @@ export default function ComputerTaskCard({ taskId }: Props) {
   if (!task?.result_text && files.length === 0) {
     return (
       <div className="my-4 space-y-4">
-        {traceSteps.length > 0 && (
-          <ThinkingTrace variant="tools" steps={traceSteps} text={traceText} tool="browser" />
-        )}
+        {trace}
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           المهمة خلصت من غير نتيجة مكتوبة.
         </p>
@@ -147,7 +135,8 @@ export default function ComputerTaskCard({ taskId }: Props) {
 
   return (
     <div className="my-4 space-y-4">
-      <ThinkingTrace variant="tools" steps={traceSteps} text={traceText} tool="browser" />
+      {trace}
+
       {task?.result_text && <ChatMessage role="assistant" content={task.result_text} />}
 
       {files.length > 0 && (
