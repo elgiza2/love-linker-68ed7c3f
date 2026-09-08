@@ -9,6 +9,7 @@
 import { toast } from "sonner";
 import type { Message } from "../chatConstants";
 import { driveDevRun, startDevRun, type DevState } from "@/lib/devagent/client";
+import { buildSiteWithoutVm, isInfraCapacityError } from "@/lib/devagent/localSiteFallback";
 
 export interface RunDevArgs {
   text: string;
@@ -122,18 +123,42 @@ export async function runDevTurn({
       if (userMessageId) ownInsertedIdsRef.current.add(userMessageId);
     }
 
-    const started = await startDevRun(prompt, cid);
     let trace = "";
-    const accumulateTrace = createTraceAccumulator();
-    const final = await driveDevRun(started.run.id, (state) => {
-      const t = accumulateTrace(state);
-      if (t) trace = t;
+    let content = "";
+    try {
+      const started = await startDevRun(prompt, cid);
+      const accumulateTrace = createTraceAccumulator();
+      const final = await driveDevRun(started.run.id, (state) => {
+        const t = accumulateTrace(state);
+        if (t) trace = t;
+        patch({ reasoning: trace });
+      });
+      const runError = (final?.run?.error as string | undefined) ?? "";
+      if (final?.run?.status === "error" && isInfraCapacityError(runError)) {
+        throw new Error(runError);
+      }
+      content = final
+        ? renderFinal(final) || renderFinalFallback(trace)
+        : "تعذر الحصول على الحالة النهائية لوكيل البرمجة.";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!isInfraCapacityError(msg)) throw err;
+      // No cloud build machine — build and publish the site in-app instead of
+      // failing, so the user still gets a working live link.
+      trace = [trace, "⏳ Building without a cloud machine…"].filter(Boolean).join("\n");
       patch({ reasoning: trace });
-    });
-
-    const content = final
-      ? renderFinal(final) || renderFinalFallback(trace)
-      : "تعذر الحصول على الحالة النهائية لوكيل البرمجة.";
+      const site = await buildSiteWithoutVm(prompt, (line) => {
+        trace = [trace, line].filter(Boolean).join("\n");
+        patch({ reasoning: trace });
+      });
+      content = [
+        site.degraded
+          ? "The project is ready. It needs a build step to run, so the link shows the full source you can download."
+          : "The site is ready and live.",
+        "",
+        `🔗 ${site.url}`,
+      ].join("\n");
+    }
     patch({ content, reasoning: trace });
     setIsLoading?.(false);
 
