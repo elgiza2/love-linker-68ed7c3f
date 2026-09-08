@@ -44,14 +44,22 @@ export async function runComputerTurn({
   const prompt = stripComputerMention(text);
   const assistantClientId = `assistant-${localTurnId}`;
 
-  // One computer run at a time. Double submits (or a re-render firing the same
-  // turn twice) used to open a second cloud desktop that immediately fought the
-  // first one for the composer, which looked like the computer "restarting".
-  const { getActiveComputerRun } = await import("@/lib/computer/activeRun");
-  if (getActiveComputerRun()) {
-    toast.error("A computer task is already running. Wait for it to finish or stop it first.");
-    return;
+  // One computer run at a time — but a new request must never be swallowed.
+  // Any run still marked active is stopped first, then this turn continues.
+  const { getActiveComputerRun, clearActiveComputerRun: dropRun } = await import(
+    "@/lib/computer/activeRun"
+  );
+  const previousRun = getActiveComputerRun();
+  if (previousRun) {
+    try {
+      const { stopComputerTask } = await import("@/lib/computer/client");
+      if (previousRun !== PENDING_COMPUTER_RUN) await stopComputerTask(previousRun);
+    } catch {
+      /* the old run is being abandoned either way */
+    }
+    dropRun(previousRun);
   }
+
 
   const computerTool: ToolPart = {
     id: `computer-${localTurnId}`,
