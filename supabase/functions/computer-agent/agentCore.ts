@@ -335,13 +335,18 @@ function extractProgress(data: any): {
   console.log(
     `browser-use payload keys=${Object.keys(data ?? {}).join(",")} steps=${rawEvents.length}`,
   );
-  if (rawEvents.length) {
-    console.log(`bu-step-shape ${JSON.stringify(rawEvents[rawEvents.length - 1]).slice(0, 900)}`);
-  }
   // Two kinds of line per step: what the agent was thinking, and what it
   // actually did on the computer (opened a page, clicked, typed, extracted…).
   // Both are kept so the reader can follow the real work, not a summary.
-  const describeAction = (a: unknown): string => {
+  const describeAction = (raw: unknown): string => {
+    let a = raw;
+    if (typeof a === "string" && /^\s*[[{]/.test(a)) {
+      try {
+        a = JSON.parse(a);
+      } catch {
+        /* keep the string */
+      }
+    }
     if (typeof a === "string") return a.replace(/\s+/g, " ").trim().slice(0, 180);
     if (!a || typeof a !== "object") return "";
     const obj = a as Record<string, any>;
@@ -612,12 +617,14 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         .map((e) => ({
           task_id: task.id,
           user_id: user.id,
-          kind: "step",
           title: e.title,
           detail: e.detail ?? null,
           url: e.url ?? null,
         }));
-      if (fresh.length) await supabase.from("computer_events").insert(fresh);
+      if (fresh.length) {
+        const { error: evErr } = await supabase.from("computer_events").insert(fresh);
+        if (evErr) console.error(`computer_events insert failed: ${evErr.message}`);
+      }
 
 
       // Output files are referenced by id upstream; resolve short-lived
