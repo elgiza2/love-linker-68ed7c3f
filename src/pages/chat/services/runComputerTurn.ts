@@ -88,18 +88,18 @@ export async function runComputerTurn({
     let intro = "";
     const introPromise = (async () => {
       try {
-      const { generateTurnPreamble } = await import("./turnPreamble");
-      await generateTurnPreamble({
-        kind: "computer",
-        userText: prompt || text,
-        conversationId: cid,
-        onDelta: (delta) => {
-          intro += delta;
-          setMessages((prev) =>
-            prev.map((m) => (m.clientId === assistantClientId ? { ...m, content: intro } : m)),
-          );
-        },
-      });
+        const { generateTurnPreamble } = await import("./turnPreamble");
+        await generateTurnPreamble({
+          kind: "computer",
+          userText: prompt || text,
+          conversationId: cid,
+          onDelta: (delta) => {
+            intro += delta;
+            setMessages((prev) =>
+              prev.map((m) => (m.clientId === assistantClientId ? { ...m, content: intro } : m)),
+            );
+          },
+        });
       } catch {
         /* the task has already started; narration is optional */
       }

@@ -99,7 +99,8 @@ export function rowToMessage(
     operatorRunId: meta.kind === "operatorRun" ? meta.operatorRunId : undefined,
     computerTaskId: meta.kind === "computerTask" ? meta.computerTaskId : undefined,
     longRunId: meta.kind === "longRun" ? meta.longRunId : undefined,
-    computerPlan: meta.kind === "longRun" ? meta.computerPlan : undefined,
+    computerPlan:
+      meta.kind === "longRun" || meta.kind === "computerTask" ? meta.computerPlan : undefined,
     // Restore media generation state (plan + per-scene results + merged video).
     mediaPlan: hasMedia ? meta.mediaPlan : undefined,
     mediaStatus: hasMedia ? (meta.mediaStatus ?? "done") : undefined,
