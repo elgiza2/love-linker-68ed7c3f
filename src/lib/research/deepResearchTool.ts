@@ -116,9 +116,39 @@ export async function runDeepResearchTool(run: DeepResearchToolRun): Promise<str
     }
   };
 
+  // Deep research legitimately takes minutes, but a silent stream looks frozen.
+  // Keep the user informed while data flows, and stop waiting after a long
+  // silence instead of hanging forever.
+  // The provider searches the live web before emitting a single token, so the
+  // first byte can take minutes; only mid-stream silence is suspicious.
+  const FIRST_BYTE_MS = 420_000;
+  const STALL_MS = 180_000;
+  let receivedAny = false;
+  let lastEventAt = Date.now();
+  const heartbeat = window.setInterval(() => {
+    const idle = Math.round((Date.now() - lastEventAt) / 1000);
+    if (idle >= 20) run.onStatus?.(`Still researching… (${idle}s without new data)`);
+  }, 15_000);
+
+  try {
   while (true) {
-    const { done, value } = await reader.read();
+    const read = await Promise.race([
+      reader.read(),
+      new Promise<"stalled">((resolve) =>
+        window.setTimeout(() => resolve("stalled"), receivedAny ? STALL_MS : FIRST_BYTE_MS),
+      ),
+    ]);
+    if (read === "stalled") {
+      await reader.cancel().catch(() => undefined);
+      if (!report.trim()) {
+        throw new Error("Deep Research stopped responding. Please try again.");
+      }
+      break;
+    }
+    const { done, value } = read;
     if (done) break;
+    lastEventAt = Date.now();
+    receivedAny = true;
     buffer += decoder.decode(value, { stream: true });
     let newline = buffer.indexOf("\n");
     while (newline !== -1) {
@@ -128,6 +158,9 @@ export async function runDeepResearchTool(run: DeepResearchToolRun): Promise<str
       consumeLine(line);
     }
   }
+  } finally {
+    window.clearInterval(heartbeat);
+  }
 
   const finalLine = buffer.trim();
   if (finalLine) consumeLine(finalLine);
@@ -135,6 +168,33 @@ export async function runDeepResearchTool(run: DeepResearchToolRun): Promise<str
   if (!report.trim()) {
     throw new Error("Deep Research completed without a report. Please try again.");
   }
+
+  // Some providers cite inside the text instead of emitting annotations. A
+  // report with no visible sources reads as unverifiable, so recover the links
+  // written in the report itself.
+  if (!sources.size) {
+    const seen = new Set<string>();
+    const push = (url: string, title: string) => {
+      const clean = url.replace(/[.,;:!?)\]]+$/, "");
+      if (!/^https?:\/\//i.test(clean) || seen.has(clean)) return;
+      seen.add(clean);
+      let label = title.trim();
+      if (!label) {
+        try {
+          label = new URL(clean).hostname.replace(/^www\./, "");
+        } catch {
+          label = clean;
+        }
+      }
+      sources.set(clean, { title: label, url: clean, snippet: "" });
+    };
+    for (const m of report.matchAll(/\[([^\]]{1,120})\]\((https?:\/\/[^\s)]+)\)/g)) {
+      push(m[2], m[1]);
+    }
+    for (const m of report.matchAll(/(?<!\]\()https?:\/\/[^\s<>")\]]+/g)) push(m[0], "");
+    if (sources.size) run.onSources?.([...sources.values()]);
+  }
+
   run.onStep?.("report");
   run.onStatus?.("Research complete");
   return report.trim();

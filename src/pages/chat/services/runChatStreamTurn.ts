@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getCachedUser } from "@/lib/cachedUser";
 import { streamChat, GUEST_QUOTA_ERROR } from "@/lib/streamChat";
 import { shouldUseWebSearch } from "@/lib/shouldUseWebSearch";
+import { shouldDelegateToDeepResearch } from "@/lib/research/deepResearchTool";
 import type { WebSource } from "@/lib/search/webSearchClient";
 
 import {
@@ -523,7 +524,11 @@ export async function runChatStreamTurn(opts: RunChatStreamTurnOptions): Promise
   // Normal chat stays on the fast chat path. Deep Research is entered only
   // when the user explicitly selects that service; this also keeps its large
   // agent module out of the first-send bundle.
-  const isDeepResearch = chatMode === "deep-research";
+  // Asking for a research report in normal chat should give the real research
+  // engine (live sources, citations), not a chat answer written from memory.
+  const isDeepResearch =
+    chatMode === "deep-research" ||
+    (chatMode === "normal" && shouldDelegateToDeepResearch(lastUserText));
 
   // Short conversation context so follow-up research questions resolve.
   const researchContext = messages
