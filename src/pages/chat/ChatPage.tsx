@@ -1803,17 +1803,34 @@ const ChatPage = () => {
     // ── Images / Video mode: plan first, then generation ──
     if (chatMode === "images" || chatMode === "video" || autoMediaMode) {
       const activeMediaMode = autoMediaMode ?? (chatMode as "images" | "video");
-      const activeMediaModel = autoMediaModel ?? mediaModel;
       const expectedMediaType = activeMediaMode === "video" ? "video" : "image";
+      let activeMediaModel = autoMediaModel ?? mediaModel;
+      // No model picked yet (or a leftover model of the wrong kind): pick the
+      // sensible default instead of throwing the user's prompt away.
+      if (!activeMediaModel || activeMediaModel.type !== expectedMediaType) {
+        try {
+          const { pickDefaultMediaModel } = await import("@/lib/media/autoMediaIntent");
+          const fallback = await pickDefaultMediaModel(expectedMediaType);
+          if (fallback) {
+            activeMediaModel = fallback;
+            setMediaModel(fallback);
+          }
+        } catch {
+          /* fall through to the message below */
+        }
+      }
       if (!activeMediaModel || activeMediaModel.type !== expectedMediaType) {
         toast.error(
           activeMediaMode === "video"
-            ? "Choose a video model first"
-            : "Choose an image model first",
+            ? "No video model is available right now. Please try again in a moment."
+            : "No image model is available right now. Please try again in a moment.",
         );
+        // Give the user their words back — never silently clear the composer.
+        setInput(text);
         isSubmittingRef.current = false;
         return;
       }
+
       const isStartEnd = activeMediaMode === "video" && videoStartEndMode;
       if (isStartEnd && (!startFrameUrl || !endFrameUrl)) {
         toast.error("Upload both the first and last frame first");
