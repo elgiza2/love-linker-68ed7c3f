@@ -48,7 +48,7 @@ export const displayNameSchema = z
       }),
   );
 
-export const MAX_CHAT_MESSAGE_CHARS = 8000;
+export const MAX_CHAT_MESSAGE_CHARS = 200000;
 
 export const chatMessageSchema = z
   .string()
