@@ -185,26 +185,39 @@ const DocumentPreviewPage = () => {
 
       {/* Bottom action bar */}
       <div
-        className="sticky bottom-0 z-10 flex items-center justify-center gap-2 border-t border-border/60 bg-background/95 px-3 pt-2 backdrop-blur"
+        className="sticky bottom-0 z-10 flex flex-wrap items-center justify-center gap-2 border-t border-border/60 bg-background/95 px-3 pt-2 backdrop-blur"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" }}
       >
         <button
           onClick={downloadPdf}
           disabled={!html || exporting}
-          className="inline-flex h-10 items-center rounded-full px-5 text-[12px] font-semibold transition hover:opacity-90 disabled:opacity-45"
-          style={{ backgroundColor: "hsl(var(--background))", color: "#ffffff" }}
+          className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-[12px] font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-45"
         >
-          {exporting ? "Preparing…" : "Download as PDF"}
+          {exporting ? "Preparing…" : "PDF"}
+        </button>
+        <button
+          onClick={downloadWord}
+          disabled={!html}
+          className="inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-[12px] font-semibold text-foreground transition hover:bg-muted disabled:opacity-45"
+        >
+          Word
+        </button>
+        <button
+          onClick={downloadExcel}
+          disabled={!html}
+          className="inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-[12px] font-semibold text-foreground transition hover:bg-muted disabled:opacity-45"
+        >
+          Excel
         </button>
         <button
           onClick={downloadHtml}
           disabled={!html}
-          className="inline-flex h-10 items-center rounded-full border px-5 text-[12px] font-semibold transition disabled:opacity-45"
-          style={{ backgroundColor: "#ffffff", borderColor: "rgba(0,0,0,0.12)", color: "#000000" }}
+          className="inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-[12px] font-semibold text-foreground transition hover:bg-muted disabled:opacity-45"
         >
-          Download as HTML
+          HTML
         </button>
       </div>
+
     </main>
   );
 };
