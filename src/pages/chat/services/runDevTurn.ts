@@ -125,8 +125,10 @@ export async function runDevTurn({
 
     let trace = "";
     let content = "";
+    let devRunId: string | null = null;
     try {
       const started = await startDevRun(prompt, cid);
+      devRunId = started.run.id;
       const accumulateTrace = createTraceAccumulator();
       const final = await driveDevRun(started.run.id, (state) => {
         const t = accumulateTrace(state);
