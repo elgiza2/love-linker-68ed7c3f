@@ -44,14 +44,16 @@ const UsagePage = () => {
 
   const planLabel = (plan || "free").toLowerCase() === "free" ? "Free" : (plan || "").toUpperCase();
   const isPaidPlan = (plan || "free").toLowerCase() !== "free";
-  // Very large balances read as noise; show them grouped, and label huge
-  // paid-plan balances as Unlimited.
+  // Very large balances read as noise; show them grouped. On a paid plan a huge
+  // balance means Unlimited, and an empty balance is covered by the plan itself.
   const creditsLabel =
     credits === null
       ? "—"
       : isPaidPlan && credits >= 100_000_000
         ? "Unlimited"
-        : credits.toLocaleString("en-US");
+        : isPaidPlan && credits <= 0
+          ? "Included in plan"
+          : credits.toLocaleString("en-US");
 
   useEffect(() => {
     let cancelled = false;
