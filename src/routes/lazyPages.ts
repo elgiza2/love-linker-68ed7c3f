@@ -15,6 +15,7 @@ export const SpeedInsights = lazy(() => import("@vercel/speed-insights/react").t
 /* ── Chat ─────────────────────────────────────────────────────── */
 export const ChatPage = lazy(() => import("@/pages/chat/ChatPage"));
 export const SharedChatPage = lazy(() => import("@/pages/chat/SharedChatPage"));
+export const SharedSitePage = lazy(() => import("@/pages/SharedSitePage"));
 export const ResearchPreviewPage = lazy(() => import("@/pages/chat/ResearchPreviewPage"));
 
 /* ── Auth (single animated hub) ───────────────────────────────── */
