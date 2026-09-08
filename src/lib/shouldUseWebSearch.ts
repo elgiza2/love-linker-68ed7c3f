@@ -52,11 +52,25 @@ const NEEDS_SEARCH_PATTERNS: RegExp[] = [
   wb("score|match|game|نتيجة|مباراة"),
 ];
 
+// "Who is X" / "معلومات عن X" style lookups about real people, companies or
+// places. The model has no reliable memory for these, and without search it
+// stalls with "let me look it up" instead of answering — so search runs even
+// when the toggle is off.
+const LOOKUP_PATTERNS: RegExp[] = [
+  /^(من\s*(هو|هي|هم)|مين\s*(هو|هي)|who\s+(is|are|was|were))\s+\S+/i,
+  /^(معلومات|ابحث|أبحث|دورلي|search|find|look\s*up)\s+(عن|لي\s+عن|for|about)?\s*\S+/i,
+];
+
 export function shouldUseWebSearch(userMessage: string, userToggle: boolean): boolean {
+  const text = (userMessage || "").trim();
+
+  // Some questions cannot be answered without live data. Run search for them
+  // even when the toggle is off, so the answer is real instead of a promise.
+  if (text && text.length <= 200 && LOOKUP_PATTERNS.some((re) => re.test(text))) return true;
+
   // User explicitly turned search OFF → respect them.
   if (!userToggle) return false;
 
-  const text = (userMessage || "").trim();
   if (!text) return userToggle;
   if (text.length > 600) return userToggle; // long prompts: let server decide
 
