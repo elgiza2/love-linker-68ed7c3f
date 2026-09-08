@@ -29,6 +29,9 @@
 - [x] Link labels keep their path so site/doc links are distinguishable
 - [x] Deep Research: speed + sources
 - [ ] Long-running tasks recovery pass
+- [x] Preserve long user messages behind an expandable “show more” control
+- [x] Stop new messages from cancelling the current cloud-agent task
+- [x] Reuse the same Browser Use session for follow-ups in one conversation
 
 ## One agent (Browser Use Cloud) — in progress
 - [x] Route main agent / docs / deep research / coding to the single cloud agent

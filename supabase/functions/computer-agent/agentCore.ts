@@ -618,7 +618,15 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
           .from("computer_tasks")
           .update({ status: "failed", error: message, updated_at: new Date().toISOString() })
           .eq("id", taskId);
-        return { status: 200, body: { task_id: taskId, status: "failed", error: message } };
+        return {
+          status: 200,
+          body: {
+            task_id: taskId,
+            status: "failed",
+            error: message,
+            message: fail.message || message,
+          },
+        };
       }
 
       const providerId = String(
@@ -634,7 +642,13 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         return { status: 200, body: { task_id: taskId, status: "failed", error: "provider_error" } };
       }
       const createdSession =
-        String(res.data?.sessionId ?? res.data?.session_id ?? "") || reuseSession || null;
+        String(
+          res.data?.sessionId ??
+            res.data?.session_id ??
+            res.data?.data?.sessionId ??
+            res.data?.data?.session_id ??
+            "",
+        ) || reuseSession || null;
       await supabase
         .from("computer_tasks")
         .update({
@@ -698,7 +712,14 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         if (resumed.ok) info.status = "running";
       }
       let liveUrl: string | null = null;
-      const sessionId = String(res.data?.sessionId ?? res.data?.session_id ?? "");
+      const sessionId = String(
+        res.data?.sessionId ??
+          res.data?.session_id ??
+          res.data?.data?.sessionId ??
+          res.data?.data?.session_id ??
+          task.provider_session_id ??
+          "",
+      );
       if (sessionId && sessionId !== task.provider_session_id) {
         await supabase
           .from("computer_tasks")
@@ -829,6 +850,7 @@ function publicTask(task: any) {
     prompt: task.prompt,
     created_at: task.created_at ?? null,
     updated_at: task.updated_at ?? null,
+    provider_session_id: task.provider_session_id ?? null,
   };
 }
 
