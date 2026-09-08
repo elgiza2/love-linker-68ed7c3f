@@ -446,10 +446,15 @@ function extractProgress(data: any): {
 
 
 
-  const rawFiles: any[] = Array.isArray(data?.outputFiles) ? data.outputFiles : [];
+  const rawFiles: any[] = Array.isArray(data?.outputFiles)
+    ? data.outputFiles
+    : Array.isArray((data as any)?.output_files)
+      ? (data as any).output_files
+      : [];
   const files = rawFiles
     .filter((f) => f?.id)
-    .map((f) => ({ id: String(f.id), name: String(f?.fileName || "file") }));
+    .map((f) => ({ id: String(f.id), name: String(f?.fileName || f?.file_name || "file") }));
+
 
   const resultText = typeof data?.output === "string" && data.output ? data.output : null;
 
