@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isPaidUser } from "@/lib/subscriptionGating";
 import { getCachedUser } from "@/lib/cachedUser";
 import { getOwnProfile } from "@/lib/ownProfile";
+import { getActiveSubscriptionPlan } from "@/lib/effectivePlan";
 
 export function useUserPlan() {
   const [plan, setPlan] = useState<string>("free");
@@ -21,11 +22,19 @@ export function useUserPlan() {
       const { data: paid } = await supabase.rpc("has_paid_plan", { p_user_id: user.id });
       if (typeof paid === "boolean") setIsPaid(paid);
 
-      const data = await getOwnProfile(user.id);
+      const [data, sub] = await Promise.all([
+        getOwnProfile(user.id),
+        getActiveSubscriptionPlan(user.id),
+      ]);
       if (data) {
         const p = (data.plan || "free").toString().toLowerCase();
         setPlan(p);
         if (typeof paid !== "boolean") setIsPaid(isPaidUser(p));
+      }
+      // An active paid subscription overrides a stale `free` profile column.
+      if (sub) {
+        setPlan(sub.plan);
+        setIsPaid(true);
       }
       setLoading(false);
     };
