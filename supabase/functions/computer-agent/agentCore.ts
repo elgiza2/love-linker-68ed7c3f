@@ -699,6 +699,12 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       }
       let liveUrl: string | null = null;
       const sessionId = String(res.data?.sessionId ?? res.data?.session_id ?? "");
+      if (sessionId && sessionId !== task.provider_session_id) {
+        await supabase
+          .from("computer_tasks")
+          .update({ provider_session_id: sessionId })
+          .eq("id", task.id);
+      }
       if (sessionId && !["done", "failed"].includes(info.status)) {
         const session = await callUpstream(
           supabase,
@@ -707,6 +713,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         );
         if (session.ok) liveUrl = String(session.data?.liveUrl ?? session.data?.live_url ?? "") || null;
       }
+
       // Persist any new steps. Deduped on the line itself, so a long run whose
       // upstream step window has scrolled past never loses or repeats history.
       const existing = await listEvents(supabase, task.id);
