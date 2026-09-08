@@ -517,6 +517,23 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       const conversationId = payload.conversation_id ?? null;
       const memory = await loadMemory(supabase, user.id, conversationId);
 
+      // Continuity: every message of the same app conversation runs inside the
+      // SAME upstream browser session, so a follow-up continues the previous
+      // work instead of opening a brand new conversation on the provider.
+      let reuseSession: string | null = null;
+      if (conversationId) {
+        const { data: prev } = await supabase
+          .from("computer_tasks")
+          .select("provider_session_id")
+          .eq("user_id", user.id)
+          .eq("conversation_id", conversationId)
+          .not("provider_session_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        reuseSession = (prev?.[0]?.provider_session_id as string | undefined) || null;
+      }
+
+
       const { data: inserted, error: insErr } = await supabase
         .from("computer_tasks")
         .insert({
