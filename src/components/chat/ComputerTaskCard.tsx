@@ -35,6 +35,7 @@ export default function ComputerTaskCard({ taskId }: Props) {
   const [task, setTask] = useState<ComputerTask | null>(null);
   const [events, setEvents] = useState<ComputerEvent[]>([]);
   const [timedOut, setTimedOut] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -54,6 +55,7 @@ export default function ComputerTaskCard({ taskId }: Props) {
         const res = await pollComputerTask(taskId);
         if (cancelled) return;
         setTask(res.task);
+        setLoaded(true);
         setEvents(res.events ?? []);
         const finished = res.task.status === "done" || res.task.status === "failed";
         if (finished) clearActiveComputerRun(taskId);
@@ -74,8 +76,12 @@ export default function ComputerTaskCard({ taskId }: Props) {
     };
   }, [taskId]);
 
+  // Until the first poll answers we know nothing: never claim the agent is
+  // working, so a finished conversation opens straight on its result.
   const running =
-    !timedOut && (!task || task.status === "pending" || task.status === "running" || task.status === "paused");
+    !timedOut &&
+    loaded &&
+    (task?.status === "pending" || task?.status === "running" || task?.status === "paused");
   const files = task?.files ?? [];
 
   const liveUrl = task?.live_url ? `${task.live_url}${task.live_url.includes("?") ? "&" : "?"}view_only=true` : null;
@@ -113,6 +119,8 @@ export default function ComputerTaskCard({ taskId }: Props) {
     />
   );
 
+
+  if (!loaded) return null;
 
   if (running) {
     return <div className="my-4 flex w-full flex-col">{trace}</div>;

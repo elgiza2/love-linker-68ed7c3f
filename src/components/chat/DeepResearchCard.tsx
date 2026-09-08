@@ -6,6 +6,7 @@ import {
 } from "@/lib/normalizeResearchReport";
 import { RESEARCH_STEPS, type ResearchStepId } from "@/lib/research/deepResearchShared";
 import ToolCard from "./primitives/ToolCard";
+import MegsyStar from "@/components/branding/MegsyStar";
 import { detectLang } from "@/lib/detectLang";
 
 interface DeepResearchCardProps {
@@ -59,7 +60,8 @@ const DeepResearchCard = ({
       >
         <div className={ar ? "text-right" : "text-left"}>
           <p className="mb-3 whitespace-pre-wrap break-words text-sm text-destructive">
-            {errorMessage || (ar ? "فشل البحث العميق. حاول تاني." : "Deep Research failed. Please try again.")}
+            {errorMessage ||
+              (ar ? "فشل البحث العميق. حاول تاني." : "Deep Research failed. Please try again.")}
           </p>
           {onRetry && (
             <button
@@ -77,43 +79,36 @@ const DeepResearchCard = ({
 
   if (status === "running") {
     const activeIndex = RESEARCH_STEPS.findIndex((step) => step.id === activeStepId);
+    // Same quiet timeline the computer agent uses: no card chrome, one icon per
+    // step, Megsy star with the light passing through it on the live line.
     return (
-      <ToolCard
-        dir={ar ? "rtl" : "ltr"}
-        className="max-w-[420px]"
-        icon={<FileText className="h-4 w-4" />}
-        title={query}
-        subtitle={ar ? "جاري البحث…" : "Researching…"}
-      >
-        <ol className={`space-y-2 ${ar ? "text-right" : "text-left"}`}>
-          {RESEARCH_STEPS.map((step, index) => {
-            const isDone = activeIndex >= 0 && index < activeIndex;
-            const isActive = index === activeIndex;
-            return (
-              <li key={step.id} className="flex items-center gap-2 text-sm">
-                {isDone ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                ) : isActive ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-                ) : (
-                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
-                )}
-                <span
-                  className={
-                    isActive
-                      ? "font-medium text-foreground"
-                      : isDone
-                        ? "text-foreground/80"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {ar ? step.labelAr : step.label}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      </ToolCard>
+      <div className="my-3 w-full" dir={ar ? "rtl" : "ltr"}>
+        <div className="border-s border-border/50 ps-3">
+          <div className="space-y-2">
+            {RESEARCH_STEPS.map((step, index) => {
+              const isDone = activeIndex >= 0 && index < activeIndex;
+              const isActive = index === activeIndex;
+              if (!isDone && !isActive) return null;
+              return (
+                <div key={step.id} className="flex items-start gap-2">
+                  {isDone ? (
+                    <CheckCircle2 className="mt-[3px] h-3.5 w-3.5 shrink-0 text-primary/70" />
+                  ) : (
+                    <MegsyStar className="mt-[3px] h-3.5 w-3.5 shrink-0 text-[var(--megsy-blue)] motion-safe:animate-pulse" />
+                  )}
+                  <span
+                    className={`text-[13px] leading-relaxed ${
+                      isActive ? "ai-shimmer font-medium" : "text-foreground/85"
+                    }`}
+                  >
+                    {ar ? step.labelAr : step.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     );
   }
 
