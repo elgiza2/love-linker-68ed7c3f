@@ -289,11 +289,14 @@ export async function runSlidesTurn(args: RunSlidesTurnArgs): Promise<void> {
       const n = m ? parseInt(m[1], 10) : NaN;
       return Number.isFinite(n) && n >= 3 && n <= 30 ? n : undefined;
     })();
-    const targetCount = plan?.outline?.steps?.length || requestedCount || 10;
+    // An explicit "5 slides" in the request always wins: the planner's outline
+    // is only a suggestion, so it must not silently override the user's number.
+    const targetCount = requestedCount || plan?.outline?.steps?.length || 10;
+
 
     setSearchStatus("Writing slides");
     let agentBrief = brief || "";
-    if (!plan?.outline?.steps?.length) {
+    if (!plan?.outline?.steps?.length || plan.outline.steps.length !== targetCount) {
       try {
         const { generateSlidesOutline, generateSlidesContent } = await import(
           "@/lib/slides/generateOutline"
