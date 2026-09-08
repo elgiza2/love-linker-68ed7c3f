@@ -160,9 +160,14 @@ const ChatMessageItemImpl = ({
           </Suspense>
         </div>
       ) : msg.role === "assistant" && msg.computerTaskId ? (
-        <Suspense fallback={null}>
-          <ComputerTaskCardLazy taskId={msg.computerTaskId} />
-        </Suspense>
+        <div className="flex flex-col gap-2">
+          {typeof msg.content === "string" && msg.content.trim() ? (
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
+          ) : null}
+          <Suspense fallback={null}>
+            <ComputerTaskCardLazy taskId={msg.computerTaskId} />
+          </Suspense>
+        </div>
       ) : msg.role === "assistant" && msg.operatorRunId ? (
         <Suspense fallback={null}>
           <OperatorInlineBubbleLazy runId={msg.operatorRunId} onDismiss={dismissOperatorRun} />
