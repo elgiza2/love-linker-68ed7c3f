@@ -598,6 +598,12 @@ export async function streamChat({
       return;
     }
     if (resp.status === 503) {
+      // Try the fast lane before telling the user anything: a busy full lane
+      // should not turn into a dead turn.
+      if (await rescueWithFastChat()) {
+        await onDone();
+        return;
+      }
       onError?.("Chat service is temporarily unavailable. Please try again.");
       await onDone();
       return;
@@ -677,13 +683,17 @@ export async function streamChat({
     // The server heartbeats every 5s while planning/researching, and every
     // heartbeat resets this timer — so this window only has to cover a truly
     // silent stream, not the whole pre-work phase.
-    const FIRST_CONTENT_TIMEOUT_MS = deepResearch ? 240_000 : isVideoTurn ? 10 * 60_000 : 45_000;
+    const FIRST_CONTENT_TIMEOUT_MS = deepResearch ? 240_000 : isVideoTurn ? 10 * 60_000 : 25_000;
+    // Hard ceiling on the silent phase: heartbeats keep resetting the idle
+    // timer, so without this a "thinking" turn could spin forever. Once this
+    // deadline passes with no visible token, the fast lane rescues the turn.
+    const firstContentDeadline = Date.now() + FIRST_CONTENT_TIMEOUT_MS;
     const resetIdle = () => {
       if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(
-        () => idleAbort.abort(),
-        receivedAnyContent ? IDLE_TIMEOUT_MS : FIRST_CONTENT_TIMEOUT_MS,
-      );
+      const wait = receivedAnyContent
+        ? IDLE_TIMEOUT_MS
+        : Math.max(1_000, Math.min(FIRST_CONTENT_TIMEOUT_MS, firstContentDeadline - Date.now()));
+      idleTimer = setTimeout(() => idleAbort.abort(), wait);
     };
     resetIdle();
 
