@@ -469,8 +469,8 @@ function extractProgress(data: any): {
  * A block is only exported when a filename is discoverable, either on the fence
  * info string (```html index.html) or on the line just above it.
  */
-function inlineFilesFromText(text: string): { name: string; url: string }[] {
-  const out: { name: string; url: string }[] = [];
+function inlineFilesFromText(text: string): { name: string; body: string }[] {
+  const out: { name: string; body: string }[] = [];
   const lines = text.split("\n");
   const nameRe = /([\w.\-/]+\.(?:html?|css|js|jsx|ts|tsx|json|py|md|txt|csv|sql|sh|yml|yaml))/i;
   const extByLang: Record<string, string> = {
@@ -497,12 +497,57 @@ function inlineFilesFromText(text: string): { name: string; url: string }[] {
         ? `file-${out.length + 1}.${extByLang[info.split(/\s+/)[0].toLowerCase()]}`
         : "");
     if (!name) continue;
-    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(code)));
-    out.push({ name, url: `data:text/plain;charset=utf-8;base64,${b64}` });
+    out.push({ name, body: code });
     if (out.length >= 8) break;
   }
   return out;
 }
+
+const CONTENT_TYPES: Record<string, string> = {
+  html: "text/html; charset=utf-8", htm: "text/html; charset=utf-8",
+  css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8",
+  json: "application/json; charset=utf-8", md: "text/markdown; charset=utf-8",
+  txt: "text/plain; charset=utf-8", csv: "text/csv; charset=utf-8",
+  ts: "text/plain; charset=utf-8", tsx: "text/plain; charset=utf-8",
+  jsx: "text/plain; charset=utf-8", py: "text/plain; charset=utf-8",
+  sql: "text/plain; charset=utf-8", sh: "text/plain; charset=utf-8",
+  yml: "text/plain; charset=utf-8", yaml: "text/plain; charset=utf-8",
+  pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  webp: "image/webp", gif: "image/gif", svg: "image/svg+xml", zip: "application/zip",
+};
+
+const FILES_BUCKET = "agent-files";
+/** A year: the chip has to keep working when the user reopens the chat later. */
+const SIGNED_URL_TTL = 60 * 60 * 24 * 365;
+
+/**
+ * Store one produced file in our own bucket and hand back a long-lived link.
+ * Upstream download URLs expire within minutes, which is why a reopened
+ * conversation used to show file chips that no longer opened.
+ */
+async function storeFile(
+  supabase: SupabaseClient,
+  userId: string,
+  taskId: string,
+  name: string,
+  body: Uint8Array | string,
+): Promise<{ name: string; url: string } | null> {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const contentType = CONTENT_TYPES[ext] || "application/octet-stream";
+  const path = `${userId}/${taskId}/${name.replace(/[^\w.\-]+/g, "_")}`;
+  const bytes = typeof body === "string" ? new TextEncoder().encode(body) : body;
+  const up = await supabase.storage
+    .from(FILES_BUCKET)
+    .upload(path, bytes, { contentType, upsert: true });
+  if (up.error) {
+    console.error(`agent file upload failed: ${up.error.message}`);
+    return null;
+  }
+  const signed = await supabase.storage.from(FILES_BUCKET).createSignedUrl(path, SIGNED_URL_TTL);
+  const url = signed.data?.signedUrl;
+  return url ? { name, url } : null;
+}
+
 
 
 
