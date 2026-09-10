@@ -754,7 +754,21 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         }, reuseKeyRef);
       }
 
-
+      // The account can be at its session ceiling — free what earlier finished
+      // tasks left open and start once more.
+      if (!res.ok && sessionBusy((res as UpstreamFail).message ?? "")) {
+        await releaseIdleSessions();
+        const durable = await createDurableSession();
+        if (durable.ok) {
+          reuseSession = durable.sessionId;
+          reuseKeyRef = durable.key.id;
+          res = await callUpstream(supabase, {
+            path: "/tasks",
+            method: "POST",
+            body: startBody(llmCandidates[0], reuseSession),
+          }, reuseKeyRef);
+        }
+      }
 
       if (!res.ok) {
         const fail = res as UpstreamFail;
@@ -775,10 +789,11 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
             task_id: taskId,
             status: "failed",
             error: message,
-            message: fail.message || message,
+            message: friendlyProviderMessage(fail.message) || message,
           },
         };
       }
+
 
       const providerId = String(
         res.data?.task_id ?? res.data?.id ?? res.data?.data?.task_id ?? res.data?.data?.id ?? "",
