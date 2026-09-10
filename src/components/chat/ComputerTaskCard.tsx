@@ -228,8 +228,10 @@ export default function ComputerTaskCard({ taskId }: Props) {
             </button>
           );
         })}
+        </div>
       </div>
     ) : null;
+
 
   return (
     <div className="my-4 space-y-4">
