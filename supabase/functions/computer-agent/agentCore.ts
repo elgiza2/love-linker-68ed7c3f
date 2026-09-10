@@ -521,6 +521,25 @@ const FILES_BUCKET = "agent-files";
 const SIGNED_URL_TTL = 60 * 60 * 24 * 365;
 
 /**
+ * The upstream sandbox only accepts a short list of extensions, so a stylesheet
+ * or a script often arrives as `style.txt`. Sniff the body and give the file the
+ * extension it really has, otherwise previews and links are useless.
+ */
+function normalizeFileName(name: string, text: string | null): string {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  if (ext !== "txt" || !text) return name;
+  const head = text.slice(0, 4000);
+  const base = name.replace(/\.txt$/i, "");
+  if (/<!doctype html|<html[\s>]|<body[\s>]/i.test(head)) return `${base}.html`;
+  if (/^\s*[{[]/.test(head) && /["}\]]\s*$/.test(text.trim())) return `${base}.json`;
+  if (/(^|\n)\s*(@media|@import|:root\b)|[.#]?[\w-]+\s*\{[^}]*:[^}]*;/.test(head)) {
+    return `${base}.css`;
+  }
+  if (/\b(function|const|let|=>|document\.|window\.)\b/.test(head)) return `${base}.js`;
+  return name;
+}
+
+/**
  * Store one produced file in our own bucket and hand back a long-lived link.
  * Upstream download URLs expire within minutes, which is why a reopened
  * conversation used to show file chips that no longer opened.
@@ -529,13 +548,23 @@ async function storeFile(
   supabase: SupabaseClient,
   userId: string,
   taskId: string,
-  name: string,
+  rawName: string,
   body: Uint8Array | string,
 ): Promise<{ name: string; url: string } | null> {
+  let sniff: string | null = typeof body === "string" ? body : null;
+  if (!sniff && rawName.toLowerCase().endsWith(".txt")) {
+    try {
+      sniff = new TextDecoder().decode(body as Uint8Array);
+    } catch {
+      sniff = null;
+    }
+  }
+  const name = normalizeFileName(rawName, sniff);
   const ext = (name.split(".").pop() || "").toLowerCase();
   const contentType = CONTENT_TYPES[ext] || "application/octet-stream";
   const path = `${userId}/${taskId}/${name.replace(/[^\w.\-]+/g, "_")}`;
   const bytes = typeof body === "string" ? new TextEncoder().encode(body) : body;
+
   const up = await supabase.storage
     .from(FILES_BUCKET)
     .upload(path, bytes, { contentType, upsert: true });
@@ -876,15 +905,21 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         resolvedFiles.push(stored ?? { name: f.name, url });
       }
 
-      // Coding tasks often end with the code written straight into the answer
-      // and no upstream artifact. Those blocks become real stored files so the
-      // user is never told "done" with nothing to open.
-      if (!resolvedFiles.length && info.resultText) {
+      // Coding tasks often end with part of the code written straight into the
+      // answer and no upstream artifact for it. Those blocks become real stored
+      // files too, so nothing the agent produced is missing from the chat.
+      if (info.resultText) {
         for (const inline of inlineFilesFromText(info.resultText)) {
+          if (resolvedFiles.some((f) => f.name.toLowerCase() === inline.name.toLowerCase())) {
+            continue;
+          }
           const stored = await storeFile(supabase, user.id, task.id, inline.name, inline.body);
-          if (stored) resolvedFiles.push(stored);
+          if (stored && !resolvedFiles.some((f) => f.name === stored.name)) {
+            resolvedFiles.push(stored);
+          }
         }
       }
+
 
 
       const patch = {
