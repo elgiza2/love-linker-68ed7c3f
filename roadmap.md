@@ -39,6 +39,8 @@
 - [x] Route main agent / docs / deep research / coding to the single cloud agent
 - [ ] Live thinking bar from the agent itself: every step (page opened, click, typed, extracted)
 - [ ] Trace never disappears; after finish it collapses into a "Thinking" button with the full history
+- [x] Files produced by the agent are stored on our side, so chips keep opening later
+- [x] Coding results get a "run preview" that renders the produced page inside the app
 - [x] Result surface: text + file chips (html/docx/xlsx/pdf) + openable links, like the reference screens
 - [ ] Task survives closing the site: reopen shows it still running, or the finished result
 
