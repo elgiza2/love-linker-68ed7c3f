@@ -151,9 +151,50 @@ export default function ComputerTaskCard({ taskId }: Props) {
     );
   }
 
+  const htmlFile = files.find((f) => /\.html?$/i.test(f.name));
+
+  /** Runs the produced code inside the app: CSS/JS are inlined into the page. */
+  const runPreview = async () => {
+    if (!htmlFile) return;
+    try {
+      const texts = await Promise.all(
+        files.map(async (f) => ({ name: f.name, text: await fetch(f.url).then((r) => r.text()) })),
+      );
+      let html = texts.find((t) => t.name === htmlFile.name)?.text ?? "";
+      for (const t of texts) {
+        if (/\.css$/i.test(t.name)) {
+          html = html.replace(
+            new RegExp(`<link[^>]*${t.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^>]*>`, "i"),
+            `<style>\n${t.text}\n</style>`,
+          );
+        } else if (/\.js$/i.test(t.name)) {
+          html = html.replace(
+            new RegExp(`<script[^>]*${t.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^>]*>\\s*</script>`, "i"),
+            `<script>\n${t.text}\n</script>`,
+          );
+        }
+      }
+      const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+      setPreview({ url, name: htmlFile.name, type: "text/html" });
+    } catch {
+      setPreview({ url: htmlFile.url, name: htmlFile.name, type: "text/html" });
+    }
+  };
+
   const fileGrid =
     files.length > 0 ? (
-      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <div className="mt-3 space-y-2.5">
+        {htmlFile ? (
+          <button
+            type="button"
+            onClick={() => void runPreview()}
+            className="w-full rounded-2xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-[13px] font-medium text-primary transition-colors hover:bg-primary/15"
+          >
+            تشغيل المعاينة
+          </button>
+        ) : null}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
         {files.map((f) => {
           const isImage =
             /\.(png|jpe?g|webp|gif|avif)$/i.test(f.url) || !!f.type?.startsWith("image/");
