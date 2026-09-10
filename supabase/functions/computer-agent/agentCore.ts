@@ -849,25 +849,43 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       }
 
 
-      // Output files are referenced by id upstream; resolve short-lived
-      // download URLs only once the task produced them.
+      // Output files live upstream behind links that expire in minutes, so each
+      // one is copied into our own storage and handed back as a durable link.
+      const existingFiles: { name: string; url: string }[] = Array.isArray(task.files)
+        ? (task.files as { name: string; url: string }[])
+        : [];
       const resolvedFiles: { name: string; url: string }[] = [];
       for (const f of info.files) {
+        if (existingFiles.some((e) => e.name === f.name && e.url.includes("/agent-files/"))) {
+          resolvedFiles.push(existingFiles.find((e) => e.name === f.name)!);
+          continue;
+        }
         const dl = await callUpstream(
           supabase,
           { path: `/files/tasks/${task.provider_task_id}/output-files/${f.id}`, method: "GET" },
            task.provider_key_ref ?? task.key_id,
         );
         const url = dl.ok ? String((dl.data as any)?.downloadUrl ?? "") : "";
-        if (url) resolvedFiles.push({ name: f.name, url });
+        if (!url) continue;
+        const bytes = await fetch(url)
+          .then((r) => (r.ok ? r.arrayBuffer() : null))
+          .catch(() => null);
+        const stored = bytes
+          ? await storeFile(supabase, user.id, task.id, f.name, new Uint8Array(bytes))
+          : null;
+        resolvedFiles.push(stored ?? { name: f.name, url });
       }
 
       // Coding tasks often end with the code written straight into the answer
-      // and no upstream artifact. Those blocks become real downloadable files
-      // so the user is never told "done" with nothing to open.
+      // and no upstream artifact. Those blocks become real stored files so the
+      // user is never told "done" with nothing to open.
       if (!resolvedFiles.length && info.resultText) {
-        resolvedFiles.push(...inlineFilesFromText(info.resultText));
+        for (const inline of inlineFilesFromText(info.resultText)) {
+          const stored = await storeFile(supabase, user.id, task.id, inline.name, inline.body);
+          if (stored) resolvedFiles.push(stored);
+        }
       }
+
 
       const patch = {
         status: info.status,
