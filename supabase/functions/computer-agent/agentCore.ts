@@ -521,6 +521,25 @@ const FILES_BUCKET = "agent-files";
 const SIGNED_URL_TTL = 60 * 60 * 24 * 365;
 
 /**
+ * The upstream sandbox only accepts a short list of extensions, so a stylesheet
+ * or a script often arrives as `style.txt`. Sniff the body and give the file the
+ * extension it really has, otherwise previews and links are useless.
+ */
+function normalizeFileName(name: string, text: string | null): string {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  if (ext !== "txt" || !text) return name;
+  const head = text.slice(0, 4000);
+  const base = name.replace(/\.txt$/i, "");
+  if (/<!doctype html|<html[\s>]|<body[\s>]/i.test(head)) return `${base}.html`;
+  if (/^\s*[{[]/.test(head) && /["}\]]\s*$/.test(text.trim())) return `${base}.json`;
+  if (/(^|\n)\s*(@media|@import|:root\b)|[.#]?[\w-]+\s*\{[^}]*:[^}]*;/.test(head)) {
+    return `${base}.css`;
+  }
+  if (/\b(function|const|let|=>|document\.|window\.)\b/.test(head)) return `${base}.js`;
+  return name;
+}
+
+/**
  * Store one produced file in our own bucket and hand back a long-lived link.
  * Upstream download URLs expire within minutes, which is why a reopened
  * conversation used to show file chips that no longer opened.
@@ -529,13 +548,23 @@ async function storeFile(
   supabase: SupabaseClient,
   userId: string,
   taskId: string,
-  name: string,
+  rawName: string,
   body: Uint8Array | string,
 ): Promise<{ name: string; url: string } | null> {
+  let sniff: string | null = typeof body === "string" ? body : null;
+  if (!sniff && rawName.toLowerCase().endsWith(".txt")) {
+    try {
+      sniff = new TextDecoder().decode(body as Uint8Array);
+    } catch {
+      sniff = null;
+    }
+  }
+  const name = normalizeFileName(rawName, sniff);
   const ext = (name.split(".").pop() || "").toLowerCase();
   const contentType = CONTENT_TYPES[ext] || "application/octet-stream";
   const path = `${userId}/${taskId}/${name.replace(/[^\w.\-]+/g, "_")}`;
   const bytes = typeof body === "string" ? new TextEncoder().encode(body) : body;
+
   const up = await supabase.storage
     .from(FILES_BUCKET)
     .upload(path, bytes, { contentType, upsert: true });
@@ -628,7 +657,7 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
       // One-off tasks close their auto-created session when they finish. Create
       // an explicit keep-alive session so every follow-up in this app
       // conversation truly continues in the same upstream browser context.
-      const createDurableSession = async () => {
+      const createDurableSession = async (): Promise<any> => {
         const session = await callUpstream(supabase, {
           path: "/sessions",
           method: "POST",
@@ -640,8 +669,41 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         return { ...session, sessionId: id };
       };
 
+      /**
+       * Keep-alive sessions stay open after a task ends, so the account can hit
+       * its concurrency ceiling. When that happens, close the sessions left
+       * behind by this user's finished tasks and try once more instead of
+       * showing a dead end.
+       */
+      const releaseIdleSessions = async () => {
+        const { data: stale } = await supabase
+          .from("computer_tasks")
+          .select("id,provider_session_id,provider_key_ref")
+          .eq("user_id", user.id)
+          .in("status", ["done", "failed"])
+          .not("provider_session_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        for (const row of stale ?? []) {
+          const sid = row.provider_session_id as string;
+          if (!sid || sid === reuseSession) continue;
+          await callUpstream(
+            supabase,
+            { path: `/sessions/${sid}`, method: "PATCH", body: { action: "stop" } },
+            (row.provider_key_ref as string | null) ?? null,
+          );
+          await supabase.from("computer_tasks").update({ provider_session_id: null }).eq("id", row.id);
+        }
+      };
+
+      const sessionBusy = (m: string) => /concurrent active sessions|too many .*sessions/i.test(m);
+
       if (!reuseSession) {
-        const durable = await createDurableSession();
+        let durable = await createDurableSession();
+        if (!durable.ok && sessionBusy((durable as UpstreamFail).message ?? "")) {
+          await releaseIdleSessions();
+          durable = await createDurableSession();
+        }
         if (!durable.ok) {
           const fail = durable as UpstreamFail;
           await supabase
@@ -650,12 +712,18 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
             .eq("id", taskId);
           return {
             status: 200,
-            body: { task_id: taskId, status: "failed", error: "provider_error", message: fail.message },
+            body: {
+              task_id: taskId,
+              status: "failed",
+              error: "provider_error",
+              message: friendlyProviderMessage(fail.message),
+            },
           };
         }
         reuseSession = durable.sessionId;
         reuseKeyRef = durable.key.id;
       }
+
 
       let res = await callUpstream(supabase, {
         path: "/tasks",
@@ -686,7 +754,21 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         }, reuseKeyRef);
       }
 
-
+      // The account can be at its session ceiling — free what earlier finished
+      // tasks left open and start once more.
+      if (!res.ok && sessionBusy((res as UpstreamFail).message ?? "")) {
+        await releaseIdleSessions();
+        const durable = await createDurableSession();
+        if (durable.ok) {
+          reuseSession = durable.sessionId;
+          reuseKeyRef = durable.key.id;
+          res = await callUpstream(supabase, {
+            path: "/tasks",
+            method: "POST",
+            body: startBody(llmCandidates[0], reuseSession),
+          }, reuseKeyRef);
+        }
+      }
 
       if (!res.ok) {
         const fail = res as UpstreamFail;
@@ -707,10 +789,11 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
             task_id: taskId,
             status: "failed",
             error: message,
-            message: fail.message || message,
+            message: friendlyProviderMessage(fail.message) || message,
           },
         };
       }
+
 
       const providerId = String(
         res.data?.task_id ?? res.data?.id ?? res.data?.data?.task_id ?? res.data?.data?.id ?? "",
@@ -876,15 +959,21 @@ export async function handleComputerAgent(payload: ComputerPayload | null): Prom
         resolvedFiles.push(stored ?? { name: f.name, url });
       }
 
-      // Coding tasks often end with the code written straight into the answer
-      // and no upstream artifact. Those blocks become real stored files so the
-      // user is never told "done" with nothing to open.
-      if (!resolvedFiles.length && info.resultText) {
+      // Coding tasks often end with part of the code written straight into the
+      // answer and no upstream artifact for it. Those blocks become real stored
+      // files too, so nothing the agent produced is missing from the chat.
+      if (info.resultText) {
         for (const inline of inlineFilesFromText(info.resultText)) {
+          if (resolvedFiles.some((f) => f.name.toLowerCase() === inline.name.toLowerCase())) {
+            continue;
+          }
           const stored = await storeFile(supabase, user.id, task.id, inline.name, inline.body);
-          if (stored) resolvedFiles.push(stored);
+          if (stored && !resolvedFiles.some((f) => f.name === stored.name)) {
+            resolvedFiles.push(stored);
+          }
         }
       }
+
 
 
       const patch = {
