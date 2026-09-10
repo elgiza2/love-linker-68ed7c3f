@@ -598,6 +598,12 @@ export async function streamChat({
       return;
     }
     if (resp.status === 503) {
+      // Try the fast lane before telling the user anything: a busy full lane
+      // should not turn into a dead turn.
+      if (await rescueWithFastChat()) {
+        await onDone();
+        return;
+      }
       onError?.("Chat service is temporarily unavailable. Please try again.");
       await onDone();
       return;
